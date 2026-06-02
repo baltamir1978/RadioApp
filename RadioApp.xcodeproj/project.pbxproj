@@ -6,13 +6,31 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		153C63C92FCAB1A9009682A9 /* AudioStreamTap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 153C63C82FCAB1A9009682A9 /* AudioStreamTap.swift */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		153C634A2FC993EF009682A9 /* RadioApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RadioApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		153C63C82FCAB1A9009682A9 /* AudioStreamTap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioStreamTap.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		153C63A72FC9B695009682A9 /* Exceptions for "RadioApp" folder in "RadioApp" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 153C63492FC993EF009682A9 /* RadioApp */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		153C634C2FC993EF009682A9 /* RadioApp */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				153C63A72FC9B695009682A9 /* Exceptions for "RadioApp" folder in "RadioApp" target */,
+			);
 			path = RadioApp;
 			sourceTree = "<group>";
 		};
@@ -34,6 +52,7 @@
 			children = (
 				153C634C2FC993EF009682A9 /* RadioApp */,
 				153C634B2FC993EF009682A9 /* Products */,
+				153C63C82FCAB1A9009682A9 /* AudioStreamTap.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -91,6 +110,10 @@
 			knownRegions = (
 				en,
 				Base,
+				es,
+				fr,
+				de,
+				pt,
 			);
 			mainGroup = 153C63412FC993EF009682A9;
 			minimizedProjectReferenceProxies = 1;
@@ -119,6 +142,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				153C63C92FCAB1A9009682A9 /* AudioStreamTap.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -256,6 +280,7 @@
 				DEVELOPMENT_TEAM = JKMR84FU58;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = RadioApp/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -288,6 +313,7 @@
 				DEVELOPMENT_TEAM = JKMR84FU58;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = RadioApp/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

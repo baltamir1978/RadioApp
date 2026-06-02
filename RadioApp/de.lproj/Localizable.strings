@@ -1,0 +1,31 @@
+/* Tabs / Navigation */
+"my_stations" = "Meine Sender";
+"search_stations" = "Sender suchen";
+"add_station" = "Sender hinzufügen";
+
+/* Now Playing */
+"live" = "Live";
+"loading" = "Lädt...";
+"close" = "Schließen";
+"no_match_found" = "Kein Song gefunden";
+
+/* Search */
+"searching" = "Suche...";
+"search_error" = "Verbindungsfehler";
+"search_prompt" = "Sendername";
+
+/* Add Station Form */
+"station_info" = "Senderdetails";
+"name_required" = "Name *";
+"stream_url_required" = "Stream-URL *";
+"logo_url_optional" = "Logo-URL (optional)";
+"additional_info" = "Weitere Infos";
+"country_hint" = "Land (z.B. DE, US)";
+"genre_hint" = "Genre (z.B. Pop, Rock)";
+"invalid_url" = "Die Stream-URL ist ungültig";
+"cancel" = "Abbrechen";
+"add" = "Hinzufügen";
+
+/* Empty states */
+"no_stations" = "Keine Sender";
+"add_stations_hint" = "Tippe auf + um einen Sender hinzuzufügen\noder suche über Radio Browser.";
