@@ -3,6 +3,23 @@ import Combine
 import SwiftUI
 import MediaPlayer
 
+/// Thread-safe holder bridging the audio render thread (stream tap) to a consumer
+/// such as ShazamKit. The buffer handler is set/cleared on the main actor but
+/// invoked from the real-time audio thread.
+final class StreamSinkBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var sink: ((AVAudioPCMBuffer) -> Void)?
+
+    func set(_ sink: ((AVAudioPCMBuffer) -> Void)?) {
+        lock.lock(); self.sink = sink; lock.unlock()
+    }
+
+    func call(_ buffer: AVAudioPCMBuffer) {
+        lock.lock(); let sink = self.sink; lock.unlock()
+        sink?(buffer)
+    }
+}
+
 @MainActor
 class RadioPlayer: NSObject, ObservableObject {
     static let shared = RadioPlayer()
@@ -23,6 +40,9 @@ class RadioPlayer: NSObject, ObservableObject {
     private var interruptionTask: Task<Void, Never>?
     private var wasPlayingBeforeInterruption = false
     private let streamTap = AudioStreamTap()
+    /// Receives decoded PCM from the live stream while a tap is active (for ShazamKit).
+    let streamSink = StreamSinkBox()
+    private var streamTapActive = false
     private var nowPlayingArtwork: MPMediaItemArtwork?
     private var artworkToken = 0
 
@@ -63,6 +83,7 @@ class RadioPlayer: NSObject, ObservableObject {
                 switch status {
                 case .readyToPlay:
                     self?.isLoading = false
+                    self?.activateStreamTap()
                 case .failed:
                     self?.isLoading = false
                     self?.isPlaying = false
@@ -82,6 +103,8 @@ class RadioPlayer: NSObject, ObservableObject {
 
     func stop() {
         streamTap.remove()
+        streamSink.set(nil)
+        streamTapActive = false
         player?.pause()
         player = nil
         playerItem = nil
@@ -109,16 +132,25 @@ class RadioPlayer: NSObject, ObservableObject {
         updateNowPlayingInfo()
     }
 
-    /// Install a passive stream tap on the current player item.
-    /// Returns false if no item is loaded or tracks aren't ready yet.
-    @discardableResult
-    func installStreamTap(handler: @escaping (AVAudioPCMBuffer, AVAudioTime?) -> Void) -> Bool {
-        guard let item = playerItem else { return false }
-        return streamTap.install(on: item, handler: handler)
-    }
+    /// Whether the passive stream tap is attached and delivering PCM to `streamSink`.
+    var isStreamTapActive: Bool { streamTapActive }
 
-    func removeStreamTap() {
-        streamTap.remove()
+    /// Attaches a passive MTAudioProcessingTap once the item has audio tracks, routing
+    /// decoded PCM to `streamSink`. Retries briefly because stream tracks load late.
+    private func activateStreamTap(retriesLeft: Int = 8) {
+        guard let item = playerItem, !streamTapActive else { return }
+        let box = streamSink
+        if streamTap.install(on: item, handler: { buffer, _ in box.call(buffer) }) {
+            streamTapActive = true
+            print("[Shazam] stream tap attached")
+        } else if retriesLeft > 0 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+                guard let self, self.playerItem === item else { return }
+                self.activateStreamTap(retriesLeft: retriesLeft - 1)
+            }
+        } else {
+            print("[Shazam] stream tap could not attach (no audio tracks)")
+        }
     }
 
     private func handleMetadata(_ metadata: [AVMetadataItem]) async {
