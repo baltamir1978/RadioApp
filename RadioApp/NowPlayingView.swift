@@ -21,27 +21,33 @@ struct NowPlayingView: View {
                         .padding(.bottom, 32)
                 }
 
-                // Station name + metadata
+                // Now playing: song title (from stream metadata or Shazam) is the star
+                // when known; otherwise the station name leads.
                 VStack(spacing: 6) {
-                    Text(player.currentStation?.name ?? "")
-                        .font(.system(size: 22, weight: .bold))
-                        .multilineTextAlignment(.center)
-
-                    if let track = player.currentTrack {
+                    if let track = player.currentTrack, !track.isEmpty {
                         Text(track)
-                            .font(.system(size: 15))
-                            .foregroundStyle(.secondary)
+                            .font(.system(size: 22, weight: .bold))
                             .multilineTextAlignment(.center)
-                            .lineLimit(2)
-                    }
-                    if let artist = player.currentArtist {
-                        Text(artist)
+                            .lineLimit(3)
+                        if let artist = player.currentArtist, !artist.isEmpty {
+                            Text(artist)
+                                .font(.system(size: 16))
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        Text(player.currentStation?.name ?? "")
                             .font(.system(size: 13))
                             .foregroundStyle(.tertiary)
+                            .padding(.top, 2)
+                    } else {
+                        Text(player.currentStation?.name ?? "")
+                            .font(.system(size: 22, weight: .bold))
+                            .multilineTextAlignment(.center)
                     }
                 }
                 .padding(.horizontal, 32)
                 .padding(.bottom, 48)
+                .animation(.easeInOut(duration: 0.25), value: player.currentTrack)
 
                 // Controls
                 HStack(spacing: 52) {
@@ -98,11 +104,15 @@ struct NowPlayingView: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
 
-                if let err = shazam.errorMessage {
+                // Only surface the "no match" notice when we have nothing else to show —
+                // if the station already provides the title, the error would be noise.
+                if let err = shazam.errorMessage, (player.currentTrack ?? "").isEmpty {
                     Text(err)
                         .font(.caption)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
                         .padding(.top, 8)
+                        .padding(.horizontal, 24)
                 }
 
                 Spacer()

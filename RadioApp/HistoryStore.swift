@@ -59,6 +59,13 @@ final class HistoryStore: ObservableObject {
     func delete(at offsets: IndexSet) { songs.remove(atOffsets: offsets); save() }
     func clearAll() { songs.removeAll(); save() }
 
+    /// Toggle the "kept" flag on an auto-captured track.
+    func toggleFavorite(_ song: ListenedSong) {
+        guard let idx = songs.firstIndex(where: { $0.id == song.id }) else { return }
+        songs[idx].favorite.toggle()
+        save()
+    }
+
     // MARK: - Persistence
 
     private func insert(_ song: ListenedSong) {

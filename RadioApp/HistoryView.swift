@@ -120,6 +120,7 @@ struct SongHistoryRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(song.title)
                     .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(song.isHighlighted ? AnyShapeStyle(accent) : AnyShapeStyle(.secondary))
                     .lineLimit(1)
                 if let artist = song.artist {
                     Text(artist)
@@ -139,9 +140,21 @@ struct SongHistoryRow: View {
             VStack(alignment: .trailing, spacing: 6) {
                 Text(timeString).font(.caption2).foregroundStyle(.secondary)
                 HStack(spacing: 10) {
-                    Image(systemName: song.source == .shazam ? "shazam.logo" : "antenna.radiowaves.left.and.right")
-                        .font(.caption2)
-                        .foregroundStyle(song.source == .shazam ? accent : .secondary)
+                    if song.source == .shazam {
+                        Image(systemName: "shazam.logo")
+                            .font(.callout)
+                            .foregroundStyle(accent)
+                    } else {
+                        // Heart to explicitly keep an auto-captured track.
+                        Button {
+                            HistoryStore.shared.toggleFavorite(song)
+                        } label: {
+                            Image(systemName: song.favorite ? "heart.fill" : "heart")
+                                .font(.callout)
+                                .foregroundStyle(song.favorite ? AnyShapeStyle(accent) : AnyShapeStyle(.secondary))
+                        }
+                        .buttonStyle(.plain)
+                    }
                     if let raw = song.appleMusicURL, let url = URL(string: raw) {
                         Link(destination: url) {
                             Image(systemName: "music.note").font(.caption2).foregroundStyle(.pink)

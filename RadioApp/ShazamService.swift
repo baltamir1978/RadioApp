@@ -10,15 +10,13 @@ struct ShazamMatch {
     let appleMusicURL: URL?
 }
 
-/// Feeds PCM buffers from the live radio stream to a ShazamKit session.
+/// Feeds the live stream's decoded PCM straight to a ShazamKit session.
 /// Lives off the main actor because `append` is called from the audio render thread.
-/// Normalises the audio to a single canonical format (48 kHz mono) with a monotonic
-/// timeline — the shape ShazamKit fingerprints most reliably.
+/// We pass the buffers through untouched — ShazamKit handles resampling internally,
+/// and any per-buffer format conversion here would introduce discontinuities that
+/// ruin the fingerprint.
 final class StreamMatcher: @unchecked Sendable {
     let session: SHSession
-    private let target = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 1)!
-    private var converter: AVAudioConverter?
-    private var sampleTime: AVAudioFramePosition = 0
 
     init(delegate: SHSessionDelegate) {
         session = SHSession()
@@ -26,34 +24,7 @@ final class StreamMatcher: @unchecked Sendable {
     }
 
     func append(_ buffer: AVAudioPCMBuffer) {
-        if let converted = convert(buffer) {
-            let time = AVAudioTime(sampleTime: sampleTime, atRate: target.sampleRate)
-            sampleTime += AVAudioFramePosition(converted.frameLength)
-            session.matchStreamingBuffer(converted, at: time)
-        } else {
-            session.matchStreamingBuffer(buffer, at: nil)
-        }
-    }
-
-    private func convert(_ buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
-        guard buffer.frameLength > 0 else { return nil }
-        if converter == nil {
-            converter = AVAudioConverter(from: buffer.format, to: target)
-        }
-        guard let converter else { return nil }
-        let ratio = target.sampleRate / buffer.format.sampleRate
-        let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 256
-        guard let out = AVAudioPCMBuffer(pcmFormat: target, frameCapacity: capacity) else { return nil }
-        var consumed = false
-        var error: NSError?
-        let status = converter.convert(to: out, error: &error) { _, inStatus in
-            if consumed { inStatus.pointee = .noDataNow; return nil }
-            consumed = true
-            inStatus.pointee = .haveData
-            return buffer
-        }
-        guard status != .error, out.frameLength > 0 else { return nil }
-        return out
+        session.matchStreamingBuffer(buffer, at: nil)
     }
 }
 
