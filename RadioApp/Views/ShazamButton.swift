@@ -11,7 +11,7 @@ struct ShazamButton: View {
         Button {
             switch shazam.state {
             case .idle, .noMatch, .error, .found:
-                shazam.identify()
+                shazam.identify(using: player)
             case .listening:
                 shazam.cancel()
             }
@@ -37,6 +37,11 @@ struct ShazamButton: View {
         .onChange(of: shazamFoundItem) { _, item in
             if let item, let station = player.currentStation {
                 history.addFromShazam(item, station: station)
+                player.updateNowPlayingFromShazam(
+                    title: item.title ?? "",
+                    artist: item.artist,
+                    artworkURL: item.artworkURL
+                )
             }
         }
         .sheet(isPresented: $showResult, onDismiss: { shazam.cancel() }) {
@@ -74,11 +79,11 @@ struct ShazamButton: View {
 
     private var label: String {
         switch shazam.state {
-        case .listening: return "Escuchando..."
-        case .found:     return "Identificado"
-        case .noMatch:   return "No encontrado"
-        case .error:     return "Error"
-        default:         return "Identificar"
+        case .listening: return String(localized: "shazam.listening")
+        case .found:     return String(localized: "shazam.found")
+        case .noMatch:   return String(localized: "shazam.noMatch")
+        case .error:     return String(localized: "shazam.error")
+        default:         return String(localized: "shazam.identify")
         }
     }
 }
@@ -100,7 +105,7 @@ struct ShazamResultView: View {
                         Image(systemName: "questionmark.circle")
                             .font(.system(size: 52))
                             .foregroundColor(.secondary)
-                        Text("No se ha podido identificar la canción")
+                        Text(String(localized: "shazam.notFound"))
                             .multilineTextAlignment(.center)
                             .foregroundColor(.secondary)
                     }
@@ -108,14 +113,14 @@ struct ShazamResultView: View {
                 case .error(let msg):
                     Text(msg).foregroundColor(.secondary).padding()
                 default:
-                    ProgressView("Identificando...")
+                    ProgressView(String(localized: "shazam.listening"))
                 }
             }
-            .navigationTitle("Shazam")
+            .navigationTitle(String(localized: "shazam.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Cerrar") { dismiss() }
+                    Button(String(localized: "action.close")) { dismiss() }
                 }
             }
         }
@@ -152,7 +157,7 @@ private struct FoundView: View {
 
             if let appleURL = item.appleMusicURL {
                 Link(destination: appleURL) {
-                    Label("Abrir en Apple Music", systemImage: "music.note")
+                    Label(String(localized: "shazam.openAppleMusic"), systemImage: "music.note")
                         .font(.subheadline)
                         .fontWeight(.semibold)
                         .padding(.horizontal, 20)

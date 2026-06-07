@@ -4,9 +4,10 @@ import UIKit
 final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
     var interfaceController: CPInterfaceController?
 
-    // Shared singletons — CarPlay runs in a separate scene without SwiftUI env
-    private let player = CarPlayBridge.shared.player
-    private let store = CarPlayBridge.shared.store
+    // Shared singletons — CarPlay runs in a separate scene without the SwiftUI env,
+    // but must drive the *same* player/store as the phone UI.
+    private let player = RadioPlayer.shared
+    private let store = StationsStore.shared
 
     func templateApplicationScene(
         _ templateApplicationScene: CPTemplateApplicationScene,
@@ -14,7 +15,6 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     ) {
         self.interfaceController = interfaceController
         interfaceController.setRootTemplate(makeStationList(), animated: false, completion: nil)
-        setupNowPlayingButton()
     }
 
     func templateApplicationScene(
@@ -37,25 +37,10 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             return item
         }
         let section = CPListSection(items: items)
-        return CPListTemplate(title: "Emisoras", sections: [section])
-    }
-
-    private func setupNowPlayingButton() {
-        let nowPlayingButton = CPNowPlayingTemplate.shared
-        interfaceController?.setRootTemplate(makeStationList(), animated: false, completion: nil)
-        _ = nowPlayingButton
+        return CPListTemplate(title: String(localized: "tab.stations"), sections: [section])
     }
 
     private func showNowPlaying() {
         interfaceController?.pushTemplate(CPNowPlayingTemplate.shared, animated: true, completion: nil)
     }
-}
-
-// MARK: - Bridge to share player/store between scenes
-
-final class CarPlayBridge {
-    static let shared = CarPlayBridge()
-    let player = RadioPlayer()
-    let store = StationsStore()
-    private init() {}
 }

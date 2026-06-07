@@ -3,6 +3,9 @@ import Combine
 import SwiftUI
 
 final class StationsStore: ObservableObject {
+    /// Single shared instance driving both the SwiftUI app and the CarPlay scene.
+    static let shared = StationsStore()
+
     @Published var stations: [Station] = []
 
     private let key = "saved_stations"

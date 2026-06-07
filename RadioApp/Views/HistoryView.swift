@@ -11,7 +11,7 @@ struct HistoryView: View {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         formatter.timeStyle = .none
-        formatter.locale = Locale(identifier: "es_ES")
+        formatter.locale = .current
         var result: [(String, [ListenedSong])] = []
         var seen: [String: Int] = [:]
         for song in history.songs {
@@ -35,26 +35,26 @@ struct HistoryView: View {
                     songList
                 }
             }
-            .navigationTitle("Historial")
+            .navigationTitle(String(localized: "history.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cerrar") { dismiss() }
+                    Button(String(localized: "action.close")) { dismiss() }
                 }
                 if !history.songs.isEmpty {
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button(role: .destructive) {
                             showClearConfirm = true
                         } label: {
-                            Text("Borrar todo")
+                            Text(String(localized: "history.clearAll"))
                                 .foregroundColor(.red)
                         }
                     }
                 }
             }
-            .confirmationDialog("¿Borrar todo el historial?", isPresented: $showClearConfirm, titleVisibility: .visible) {
-                Button("Borrar todo", role: .destructive) { history.clearAll() }
-                Button("Cancelar", role: .cancel) {}
+            .confirmationDialog(String(localized: "history.clearConfirm"), isPresented: $showClearConfirm, titleVisibility: .visible) {
+                Button(String(localized: "history.clearAll"), role: .destructive) { history.clearAll() }
+                Button(String(localized: "action.cancel"), role: .cancel) {}
             }
         }
     }
@@ -87,9 +87,9 @@ struct HistoryView: View {
             Image(systemName: "music.note.list")
                 .font(.system(size: 52))
                 .foregroundColor(.secondary)
-            Text("Sin historial todavía")
+            Text(String(localized: "history.empty"))
                 .font(.headline)
-            Text("Las canciones que escuches aparecerán aquí automáticamente o al identificarlas con Shazam.")
+            Text(String(localized: "history.emptyDetail"))
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)

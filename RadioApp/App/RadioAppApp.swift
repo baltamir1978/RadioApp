@@ -4,8 +4,8 @@ import Combine
 @main
 struct RadioAppApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @StateObject private var player  = RadioPlayer()
-    @StateObject private var store   = StationsStore()
+    @StateObject private var player  = RadioPlayer.shared
+    @StateObject private var store   = StationsStore.shared
     @StateObject private var shazam  = ShazamService()
     @StateObject private var history = HistoryStore()
 

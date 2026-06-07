@@ -123,7 +123,7 @@ struct PlayerBar: View {
                                 .lineLimit(1)
                                 .transition(.opacity)
                         } else {
-                            Text("En directo")
+                            Text(String(localized: "player.live"))
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
