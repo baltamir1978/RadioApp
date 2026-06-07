@@ -132,9 +132,6 @@ class RadioPlayer: NSObject, ObservableObject {
         updateNowPlayingInfo()
     }
 
-    /// Whether the passive stream tap is attached and delivering PCM to `streamSink`.
-    var isStreamTapActive: Bool { streamTapActive }
-
     /// Attaches a passive MTAudioProcessingTap once the item has audio tracks, routing
     /// decoded PCM to `streamSink`. Retries briefly because stream tracks load late.
     private func activateStreamTap(retriesLeft: Int = 8) {
@@ -142,14 +139,11 @@ class RadioPlayer: NSObject, ObservableObject {
         let box = streamSink
         if streamTap.install(on: item, handler: { buffer, _ in box.call(buffer) }) {
             streamTapActive = true
-            print("[Shazam] stream tap attached")
         } else if retriesLeft > 0 {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
                 guard let self, self.playerItem === item else { return }
                 self.activateStreamTap(retriesLeft: retriesLeft - 1)
             }
-        } else {
-            print("[Shazam] stream tap could not attach (no audio tracks)")
         }
     }
 

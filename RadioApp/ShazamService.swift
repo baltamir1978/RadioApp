@@ -19,7 +19,6 @@ final class StreamMatcher: @unchecked Sendable {
     private let target = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 1)!
     private var converter: AVAudioConverter?
     private var sampleTime: AVAudioFramePosition = 0
-    private var bufferCount = 0
 
     init(delegate: SHSessionDelegate) {
         session = SHSession()
@@ -27,10 +26,6 @@ final class StreamMatcher: @unchecked Sendable {
     }
 
     func append(_ buffer: AVAudioPCMBuffer) {
-        bufferCount += 1
-        if bufferCount == 1 {
-            print("[Shazam] first stream buffer: \(buffer.format.sampleRate)Hz, \(buffer.format.channelCount)ch")
-        }
         if let converted = convert(buffer) {
             let time = AVAudioTime(sampleTime: sampleTime, atRate: target.sampleRate)
             sampleTime += AVAudioFramePosition(converted.frameLength)
@@ -121,7 +116,6 @@ class ShazamService: NSObject, ObservableObject, SHSessionDelegate {
         self.matcher = matcher
         usingStreamTap = true
         RadioPlayer.shared.streamSink.set { matcher.append($0) }
-        print("[Shazam] listening via stream tap (tap active: \(RadioPlayer.shared.isStreamTapActive))")
         scheduleTimeout()
     }
 
@@ -129,7 +123,6 @@ class ShazamService: NSObject, ObservableObject, SHSessionDelegate {
         identifyTimer = Timer.scheduledTimer(withTimeInterval: listenWindow, repeats: false) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self, self.isListening else { return }
-                print("[Shazam] no match after \(Int(self.listenWindow))s")
                 self.errorMessage = NSLocalizedString("no_match_found", comment: "")
                 self.stop()
             }
@@ -179,10 +172,8 @@ class ShazamService: NSObject, ObservableObject, SHSessionDelegate {
             }
 
             try engine.start()
-            print("[Shazam] listening via microphone")
             scheduleTimeout()
         } catch {
-            print("[Shazam] mic engine error: \(error.localizedDescription)")
             errorMessage = error.localizedDescription
             stopEngine()
             restoreAudioSession()
@@ -217,13 +208,11 @@ class ShazamService: NSObject, ObservableObject, SHSessionDelegate {
         )
         Task { @MainActor in
             guard self.isListening else { return }
-            print("[Shazam] MATCH: \(result.title) — \(result.artist)")
             self.match = result
             self.stop()
         }
     }
 
-    nonisolated func session(_ session: SHSession, didNotFindMatchFor signature: SHSignature, error: (any Error)?) {
-        if let error { print("[Shazam] signature not matched: \(error.localizedDescription)") }
-    }
+    // A single unmatched signature is normal while streaming — the timeout decides.
+    nonisolated func session(_ session: SHSession, didNotFindMatchFor signature: SHSignature, error: (any Error)?) {}
 }
