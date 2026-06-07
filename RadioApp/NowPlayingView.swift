@@ -108,6 +108,14 @@ struct NowPlayingView: View {
                 Spacer()
             }
             .animation(.spring(duration: 0.4), value: shazam.match != nil)
+            .onChange(of: shazam.match?.title) { _, _ in
+                if let m = shazam.match {
+                    player.updateNowPlayingFromShazam(title: m.title, artist: m.artist, artworkURL: m.artworkURL)
+                    if let station = player.currentStation {
+                        HistoryStore.shared.addFromShazam(m, stationName: station.name)
+                    }
+                }
+            }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {

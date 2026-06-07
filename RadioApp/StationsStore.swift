@@ -4,6 +4,8 @@ import SwiftUI
 
 @MainActor
 class StationsStore: ObservableObject {
+    static let shared = StationsStore()
+
     @Published var stations: [Station] = []
 
     private let saveKey = "saved_stations"

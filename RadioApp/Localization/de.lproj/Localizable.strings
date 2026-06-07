@@ -1,61 +1,38 @@
-/* Navigation */
-"app.title"              = "Radio";
-"tab.stations"           = "Sender";
-"tab.history"            = "Verlauf";
+/* Tabs / Navigation */
+"my_stations" = "Meine Sender";
+"search_stations" = "Sender suchen";
+"add_station" = "Sender hinzufügen";
+
+/* Now Playing */
+"live" = "Live";
+"loading" = "Lädt...";
+"close" = "Schließen";
+"no_match_found" = "Kein Song gefunden";
 
 /* Search */
-"search.title"           = "Sender suchen";
-"search.placeholder"     = "Sendername…";
-"search.noResults"       = "Keine Ergebnisse";
-"search.error"           = "Verbindung fehlgeschlagen";
-"filter.all"             = "Alle";
+"searching" = "Suche...";
+"search_error" = "Verbindungsfehler";
+"search_prompt" = "Sendername";
 
-/* Player bar */
-"player.live"            = "Live";
-"player.loading"         = "Verbinde…";
+/* Add Station Form */
+"station_info" = "Senderdetails";
+"name_required" = "Name *";
+"stream_url_required" = "Stream-URL *";
+"logo_url_optional" = "Logo-URL (optional)";
+"additional_info" = "Weitere Infos";
+"country_hint" = "Land (z.B. DE, US)";
+"genre_hint" = "Genre (z.B. Pop, Rock)";
+"invalid_url" = "Die Stream-URL ist ungültig";
+"cancel" = "Abbrechen";
+"add" = "Hinzufügen";
 
-/* Settings */
-"settings.title"         = "Einstellungen";
-"settings.stations"      = "Sender";
-"settings.addStation"    = "Sender hinzufügen";
-"settings.buffer"        = "Audio-Puffer";
-"settings.bufferFast"    = "2 s (schnell)";
-"settings.bufferStable"  = "60 s (stabil)";
-"settings.bufferFooter"  = "Ein größerer Puffer reduziert Aussetzer bei langsamen Verbindungen.";
-
-/* Station form */
-"form.name"              = "Name";
-"form.namePlaceholder"   = "z. B. Deutschlandfunk";
-"form.url"               = "Stream-URL (MP3)";
-"form.urlPlaceholder"    = "http://stream.beispiel.de/radio.mp3";
-"form.logo"              = "Logo (Bild-URL)";
-"form.logoPlaceholder"   = "https://beispiel.de/logo.png";
-"form.logoFooter"        = "Optional. Ohne Angabe werden die Initialen angezeigt.";
-"form.newStation"        = "Neuer Sender";
-"form.editStation"       = "Sender bearbeiten";
+/* Empty states */
+"no_stations" = "Keine Sender";
+"add_stations_hint" = "Tippe auf + um einen Sender hinzuzufügen\noder suche über Radio Browser.";
 
 /* History */
-"history.title"          = "Verlauf";
-"history.empty"          = "Noch kein Verlauf";
-"history.emptyDetail"    = "Gehörte Songs erscheinen hier automatisch oder nach Shazam-Erkennung.";
-"history.clearAll"       = "Alles löschen";
-"history.clearConfirm"   = "Gesamten Verlauf löschen?";
-"history.live"           = "Live";
-
-/* Shazam */
-"shazam.identify"        = "Erkennen";
-"shazam.listening"       = "Hört zu…";
-"shazam.found"           = "Erkannt";
-"shazam.noMatch"         = "Nicht gefunden";
-"shazam.error"           = "Fehler";
-"shazam.title"           = "Shazam";
-"shazam.openAppleMusic"  = "In Apple Music öffnen";
-"shazam.notFound"        = "Song konnte nicht erkannt werden";
-"shazam.micDenied"       = "Mikrofonzugriff verweigert";
-
-/* Actions */
-"action.save"            = "Speichern";
-"action.cancel"          = "Abbrechen";
-"action.close"           = "Schließen";
-"action.retry"           = "Erneut versuchen";
-"action.edit"            = "Bearbeiten";
+"history_title" = "Verlauf";
+"history_clear_all" = "Alle löschen";
+"history_clear_confirm" = "Gesamten Verlauf löschen?";
+"history_empty" = "Noch kein Verlauf";
+"history_empty_detail" = "Gespielte Songs erscheinen hier automatisch oder wenn du sie mit Shazam erkennst.";

@@ -5,6 +5,7 @@ struct StationsListView: View {
     @EnvironmentObject var player: RadioPlayer
     @Binding var showSearch: Bool
     @Binding var showAdd: Bool
+    @Binding var showHistory: Bool
 
     @State private var showNowPlaying = false
     @State private var stationToEdit: Station?
@@ -38,6 +39,10 @@ struct StationsListView: View {
                     .foregroundStyle(Color(hex: "#FF6B35"))
             }
             ToolbarItemGroup(placement: .navigationBarTrailing) {
+                Button { showHistory = true } label: {
+                    Image(systemName: "music.note.list")
+                        .foregroundStyle(Color(hex: "#FF6B35"))
+                }
                 Button { showSearch = true } label: {
                     Image(systemName: "magnifyingglass")
                         .foregroundStyle(Color(hex: "#FF6B35"))

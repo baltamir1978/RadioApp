@@ -20,6 +20,8 @@ class RadioPlayer: NSObject, ObservableObject {
     private var interruptionTask: Task<Void, Never>?
     private var wasPlayingBeforeInterruption = false
     private let streamTap = AudioStreamTap()
+    private var nowPlayingArtwork: MPMediaItemArtwork?
+    private var artworkToken = 0
 
     private override init() {
         super.init()
@@ -67,7 +69,9 @@ class RadioPlayer: NSObject, ObservableObject {
         player = AVPlayer(playerItem: item)
         player?.play()
         isPlaying = true
+        nowPlayingArtwork = nil
         updateNowPlayingInfo()
+        loadArtwork(preferredURL: station.logoURL, initials: station.initials, seed: station.name)
     }
 
     func stop() {
@@ -79,6 +83,8 @@ class RadioPlayer: NSObject, ObservableObject {
         metadataOutput = nil
         isPlaying = false
         isLoading = false
+        nowPlayingArtwork = nil
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
     }
 
     func togglePlayPause() {
@@ -182,7 +188,69 @@ class RadioPlayer: NSObject, ObservableObject {
         info[MPMediaItemPropertyTitle] = currentTrack ?? currentStation?.name ?? ""
         info[MPMediaItemPropertyArtist] = currentArtist ?? currentStation?.name ?? ""
         info[MPNowPlayingInfoPropertyIsLiveStream] = true
+        info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
+        if let artwork = nowPlayingArtwork {
+            info[MPMediaItemPropertyArtwork] = artwork
+        }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+    }
+
+    /// Enriches the lock screen when ShazamKit identifies the current track.
+    func updateNowPlayingFromShazam(title: String, artist: String?, artworkURL: URL?) {
+        currentTrack = title
+        currentArtist = artist
+        updateNowPlayingInfo()
+        loadArtwork(preferredURL: artworkURL?.absoluteString,
+                    initials: currentStation?.initials ?? "♪",
+                    seed: currentStation?.name ?? title)
+    }
+
+    /// Loads lock-screen artwork (logo / song art, or drawn initials) off the main thread.
+    private func loadArtwork(preferredURL: String?, initials: String, seed: String) {
+        artworkToken += 1
+        let token = artworkToken
+        Task.detached(priority: .utility) {
+            let image = await Self.artworkImage(urlString: preferredURL, initials: initials, seed: seed)
+            await MainActor.run { [weak self] in
+                guard let self, token == self.artworkToken else { return }
+                self.nowPlayingArtwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+                self.updateNowPlayingInfo()
+            }
+        }
+    }
+
+    private nonisolated static func artworkImage(urlString: String?, initials: String, seed: String) async -> UIImage {
+        if let raw = urlString, let url = URL(string: raw),
+           let (data, _) = try? await URLSession.shared.data(from: url),
+           let image = UIImage(data: data) {
+            return image
+        }
+        return drawInitialsImage(initials, seed: seed)
+    }
+
+    /// Renders a colored 512×512 tile with the station initials — a graceful artwork fallback.
+    private nonisolated static func drawInitialsImage(_ initials: String, seed: String) -> UIImage {
+        let palette: [UIColor] = [.systemRed, .systemOrange, .systemBlue, .systemPurple,
+                                  .systemGreen, .systemPink, .systemIndigo, .systemTeal]
+        let index = ((seed.hashValue % palette.count) + palette.count) % palette.count
+        let color = palette[index]
+        let size = CGSize(width: 512, height: 512)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { _ in
+            color.withAlphaComponent(0.22).setFill()
+            UIBezierPath(rect: CGRect(origin: .zero, size: size)).fill()
+            let paragraph = NSMutableParagraphStyle()
+            paragraph.alignment = .center
+            let attrs: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: 220, weight: .bold),
+                .foregroundColor: color,
+                .paragraphStyle: paragraph,
+            ]
+            let text = initials as NSString
+            let textHeight = text.size(withAttributes: attrs).height
+            let rect = CGRect(x: 0, y: (size.height - textHeight) / 2, width: size.width, height: textHeight)
+            text.draw(in: rect, withAttributes: attrs)
+        }
     }
 }
 

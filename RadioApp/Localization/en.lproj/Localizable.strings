@@ -1,61 +1,38 @@
-/* Navigation */
-"app.title"              = "Radio";
-"tab.stations"           = "Stations";
-"tab.history"            = "History";
+/* Tabs / Navigation */
+"my_stations" = "My Stations";
+"search_stations" = "Search Stations";
+"add_station" = "Add Station";
+
+/* Now Playing */
+"live" = "Live";
+"loading" = "Loading...";
+"close" = "Close";
+"no_match_found" = "No song found";
 
 /* Search */
-"search.title"           = "Find stations";
-"search.placeholder"     = "Station name…";
-"search.noResults"       = "No results";
-"search.error"           = "Could not connect";
-"filter.all"             = "All";
+"searching" = "Searching...";
+"search_error" = "Connection error";
+"search_prompt" = "Station name";
 
-/* Player bar */
-"player.live"            = "Live";
-"player.loading"         = "Connecting…";
+/* Add Station Form */
+"station_info" = "Station details";
+"name_required" = "Name *";
+"stream_url_required" = "Stream URL *";
+"logo_url_optional" = "Logo URL (optional)";
+"additional_info" = "Additional info";
+"country_hint" = "Country (e.g. ES, US)";
+"genre_hint" = "Genre (e.g. Pop, Rock)";
+"invalid_url" = "The stream URL is not valid";
+"cancel" = "Cancel";
+"add" = "Add";
 
-/* Settings */
-"settings.title"         = "Settings";
-"settings.stations"      = "Stations";
-"settings.addStation"    = "Add station";
-"settings.buffer"        = "Audio buffer";
-"settings.bufferFast"    = "2 s (fast)";
-"settings.bufferStable"  = "60 s (stable)";
-"settings.bufferFooter"  = "A larger buffer reduces dropouts on slow connections.";
-
-/* Station form */
-"form.name"              = "Name";
-"form.namePlaceholder"   = "E.g. BBC Radio 1";
-"form.url"               = "Stream URL (MP3)";
-"form.urlPlaceholder"    = "http://stream.example.com/radio.mp3";
-"form.logo"              = "Logo (image URL)";
-"form.logoPlaceholder"   = "https://example.com/logo.png";
-"form.logoFooter"        = "Optional. If left empty, initials are shown instead.";
-"form.newStation"        = "New station";
-"form.editStation"       = "Edit station";
+/* Empty states */
+"no_stations" = "No stations";
+"add_stations_hint" = "Tap + to add a station manually\nor use the search icon to browse Radio Browser.";
 
 /* History */
-"history.title"          = "History";
-"history.empty"          = "No history yet";
-"history.emptyDetail"    = "Songs you listen to will appear here automatically or when identified with Shazam.";
-"history.clearAll"       = "Clear all";
-"history.clearConfirm"   = "Clear all history?";
-"history.live"           = "Live";
-
-/* Shazam */
-"shazam.identify"        = "Identify";
-"shazam.listening"       = "Listening…";
-"shazam.found"           = "Identified";
-"shazam.noMatch"         = "Not found";
-"shazam.error"           = "Error";
-"shazam.title"           = "Shazam";
-"shazam.openAppleMusic"  = "Open in Apple Music";
-"shazam.notFound"        = "Could not identify the song";
-"shazam.micDenied"       = "Microphone permission denied";
-
-/* Actions */
-"action.save"            = "Save";
-"action.cancel"          = "Cancel";
-"action.close"           = "Close";
-"action.retry"           = "Retry";
-"action.edit"            = "Edit";
+"history_title" = "History";
+"history_clear_all" = "Clear all";
+"history_clear_confirm" = "Clear all history?";
+"history_empty" = "No history yet";
+"history_empty_detail" = "Songs that play will appear here automatically or when identified with Shazam.";
