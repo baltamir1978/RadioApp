@@ -6,6 +6,7 @@ struct StationsListView: View {
     @Binding var showSearch: Bool
     @Binding var showAdd: Bool
     @Binding var showHistory: Bool
+    @Binding var showSettings: Bool
 
     @State private var showNowPlaying = false
     @State private var stationToEdit: Station?
@@ -34,7 +35,11 @@ struct StationsListView: View {
         }
         .navigationTitle(NSLocalizedString("my_stations", comment: ""))
         .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
+            ToolbarItemGroup(placement: .navigationBarLeading) {
+                Button { showSettings = true } label: {
+                    Image(systemName: "gearshape")
+                        .foregroundStyle(Color(hex: "#FF6B35"))
+                }
                 EditButton()
                     .foregroundStyle(Color(hex: "#FF6B35"))
             }
@@ -128,14 +133,14 @@ struct StationRow: View {
         .buttonStyle(.plain)
         .contextMenu {
             Button { onTap() } label: {
-                Label("Reproducir", systemImage: "play.fill")
+                Label(NSLocalizedString("play", comment: ""), systemImage: "play.fill")
             }
             Button { onEdit() } label: {
-                Label("Editar", systemImage: "pencil")
+                Label(NSLocalizedString("edit", comment: ""), systemImage: "pencil")
             }
             Divider()
             Button(role: .destructive) { onDelete() } label: {
-                Label("Eliminar", systemImage: "trash")
+                Label(NSLocalizedString("delete", comment: ""), systemImage: "trash")
             }
         }
     }

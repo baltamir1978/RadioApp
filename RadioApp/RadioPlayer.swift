@@ -12,6 +12,9 @@ class RadioPlayer: NSObject, ObservableObject {
     @Published var isLoading = false
     @Published var currentTrack: String?
     @Published var currentArtist: String?
+    @Published var bufferDuration: Double {
+        didSet { UserDefaults.standard.set(bufferDuration, forKey: "buffer_duration") }
+    }
 
     private var player: AVPlayer?
     private var playerItem: AVPlayerItem?
@@ -24,6 +27,8 @@ class RadioPlayer: NSObject, ObservableObject {
     private var artworkToken = 0
 
     private override init() {
+        let saved = UserDefaults.standard.double(forKey: "buffer_duration")
+        bufferDuration = saved > 0 ? saved : 10.0
         super.init()
         setupAudioSession()
         setupRemoteControls()
@@ -44,6 +49,7 @@ class RadioPlayer: NSObject, ObservableObject {
         }
 
         let item = AVPlayerItem(url: url)
+        item.preferredForwardBufferDuration = bufferDuration
         playerItem = item
 
         let output = AVPlayerItemMetadataOutput(identifiers: nil)

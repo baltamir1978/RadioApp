@@ -124,7 +124,7 @@ struct NowPlayingView: View {
                         Circle()
                             .fill(accent)
                             .frame(width: 7, height: 7)
-                        Text("EN DIRECTO")
+                        Text(NSLocalizedString("live", comment: "").uppercased())
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(accent)
                             .kerning(0.5)

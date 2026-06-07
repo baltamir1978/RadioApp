@@ -36,3 +36,20 @@
 "history_clear_confirm" = "Gesamten Verlauf löschen?";
 "history_empty" = "Noch kein Verlauf";
 "history_empty_detail" = "Gespielte Songs erscheinen hier automatisch oder wenn du sie mit Shazam erkennst.";
+
+/* Settings */
+"settings_title" = "Einstellungen";
+"settings_buffer" = "Audio-Puffer";
+"settings_buffer_fast" = "2 s (schnell)";
+"settings_buffer_stable" = "60 s (stabil)";
+"settings_buffer_footer" = "Ein größerer Puffer reduziert Aussetzer bei langsamen Verbindungen.";
+"settings_version" = "Version";
+
+/* Actions / misc */
+"play" = "Abspielen";
+"edit" = "Bearbeiten";
+"delete" = "Löschen";
+"save" = "Speichern";
+"edit_station" = "Sender bearbeiten";
+"preview" = "Vorschau";
+"mic_denied" = "Mikrofonzugriff verweigert. Aktiviere ihn in den Einstellungen.";

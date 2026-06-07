@@ -7,11 +7,12 @@ struct ContentView: View {
     @State private var showSearch = false
     @State private var showAdd = false
     @State private var showHistory = false
+    @State private var showSettings = false
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                StationsListView(showSearch: $showSearch, showAdd: $showAdd, showHistory: $showHistory)
+                StationsListView(showSearch: $showSearch, showAdd: $showAdd, showHistory: $showHistory, showSettings: $showSettings)
                     .environmentObject(store)
                     .environmentObject(player)
 
@@ -43,6 +44,9 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showHistory) {
             HistoryView()
+        }
+        .sheet(isPresented: $showSettings) {
+            SettingsView()
         }
     }
 }

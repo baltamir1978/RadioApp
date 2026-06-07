@@ -36,3 +36,20 @@
 "history_clear_confirm" = "¿Borrar todo el historial?";
 "history_empty" = "Sin historial todavía";
 "history_empty_detail" = "Las canciones que suenen aparecerán aquí automáticamente o al identificarlas con Shazam.";
+
+/* Settings */
+"settings_title" = "Ajustes";
+"settings_buffer" = "Buffer de audio";
+"settings_buffer_fast" = "2 s (rápido)";
+"settings_buffer_stable" = "60 s (estable)";
+"settings_buffer_footer" = "Un buffer mayor reduce los cortes en conexiones lentas.";
+"settings_version" = "Versión";
+
+/* Actions / misc */
+"play" = "Reproducir";
+"edit" = "Editar";
+"delete" = "Eliminar";
+"save" = "Guardar";
+"edit_station" = "Editar Emisora";
+"preview" = "Vista previa";
+"mic_denied" = "Permiso de micrófono denegado. Actívalo en Ajustes.";

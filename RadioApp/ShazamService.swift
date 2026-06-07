@@ -91,7 +91,7 @@ class ShazamService: NSObject, ObservableObject, SHSessionDelegate {
                 self.startEngine()
             } else {
                 self.session = nil
-                self.errorMessage = "Permiso de micrófono denegado. Actívalo en Ajustes."
+                self.errorMessage = NSLocalizedString("mic_denied", comment: "")
             }
         }
     }

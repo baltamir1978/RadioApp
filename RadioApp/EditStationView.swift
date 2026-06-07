@@ -49,7 +49,7 @@ struct EditStationView: View {
 
                 // Live preview of logo
                 if !name.isEmpty {
-                    Section("Vista previa") {
+                    Section(NSLocalizedString("preview", comment: "")) {
                         HStack(spacing: 12) {
                             StationLogo(station: previewStation, size: 52)
                             Text(name).font(.headline)
@@ -58,14 +58,14 @@ struct EditStationView: View {
                     }
                 }
             }
-            .navigationTitle("Editar Emisora")
+            .navigationTitle(NSLocalizedString("edit_station", comment: ""))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(NSLocalizedString("cancel", comment: "")) { dismiss() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Guardar") {
+                    Button(NSLocalizedString("save", comment: "")) {
                         store.update(station, with: Station(
                             id: station.id,
                             name: name,
