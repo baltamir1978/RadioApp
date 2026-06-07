@@ -1,0 +1,61 @@
+/* Navigation */
+"app.title"              = "Rádio";
+"tab.stations"           = "Estações";
+"tab.history"            = "Histórico";
+
+/* Search */
+"search.title"           = "Encontrar estações";
+"search.placeholder"     = "Nome da estação…";
+"search.noResults"       = "Sem resultados";
+"search.error"           = "Não foi possível conectar";
+"filter.all"             = "Todas";
+
+/* Player bar */
+"player.live"            = "Ao vivo";
+"player.loading"         = "Conectando…";
+
+/* Settings */
+"settings.title"         = "Definições";
+"settings.stations"      = "Estações";
+"settings.addStation"    = "Adicionar estação";
+"settings.buffer"        = "Buffer de áudio";
+"settings.bufferFast"    = "2 s (rápido)";
+"settings.bufferStable"  = "60 s (estável)";
+"settings.bufferFooter"  = "Um buffer maior reduz interrupções em ligações lentas.";
+
+/* Station form */
+"form.name"              = "Nome";
+"form.namePlaceholder"   = "Ex. Rádio Comercial";
+"form.url"               = "URL do stream (MP3)";
+"form.urlPlaceholder"    = "http://stream.exemplo.com/radio.mp3";
+"form.logo"              = "Logo (URL de imagem)";
+"form.logoPlaceholder"   = "https://exemplo.com/logo.png";
+"form.logoFooter"        = "Opcional. Se deixado em branco, as iniciais são exibidas.";
+"form.newStation"        = "Nova estação";
+"form.editStation"       = "Editar estação";
+
+/* History */
+"history.title"          = "Histórico";
+"history.empty"          = "Sem histórico ainda";
+"history.emptyDetail"    = "As músicas ouvidas aparecerão aqui automaticamente ou ao identificá-las com o Shazam.";
+"history.clearAll"       = "Apagar tudo";
+"history.clearConfirm"   = "Apagar todo o histórico?";
+"history.live"           = "Ao vivo";
+
+/* Shazam */
+"shazam.identify"        = "Identificar";
+"shazam.listening"       = "A ouvir…";
+"shazam.found"           = "Identificado";
+"shazam.noMatch"         = "Não encontrado";
+"shazam.error"           = "Erro";
+"shazam.title"           = "Shazam";
+"shazam.openAppleMusic"  = "Abrir no Apple Music";
+"shazam.notFound"        = "Não foi possível identificar a música";
+"shazam.micDenied"       = "Permissão do microfone negada";
+
+/* Actions */
+"action.save"            = "Guardar";
+"action.cancel"          = "Cancelar";
+"action.close"           = "Fechar";
+"action.retry"           = "Tentar novamente";
+"action.edit"            = "Editar";

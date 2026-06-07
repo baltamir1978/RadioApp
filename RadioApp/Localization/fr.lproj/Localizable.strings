@@ -1,0 +1,61 @@
+/* Navigation */
+"app.title"              = "Radio";
+"tab.stations"           = "Stations";
+"tab.history"            = "Historique";
+
+/* Search */
+"search.title"           = "Trouver des stations";
+"search.placeholder"     = "Nom de la station…";
+"search.noResults"       = "Aucun résultat";
+"search.error"           = "Impossible de se connecter";
+"filter.all"             = "Toutes";
+
+/* Player bar */
+"player.live"            = "En direct";
+"player.loading"         = "Connexion…";
+
+/* Settings */
+"settings.title"         = "Réglages";
+"settings.stations"      = "Stations";
+"settings.addStation"    = "Ajouter une station";
+"settings.buffer"        = "Tampon audio";
+"settings.bufferFast"    = "2 s (rapide)";
+"settings.bufferStable"  = "60 s (stable)";
+"settings.bufferFooter"  = "Un tampon plus grand réduit les coupures sur les connexions lentes.";
+
+/* Station form */
+"form.name"              = "Nom";
+"form.namePlaceholder"   = "Ex. France Inter";
+"form.url"               = "URL du flux (MP3)";
+"form.urlPlaceholder"    = "http://flux.exemple.com/radio.mp3";
+"form.logo"              = "Logo (URL image)";
+"form.logoPlaceholder"   = "https://exemple.com/logo.png";
+"form.logoFooter"        = "Optionnel. Si vide, les initiales sont affichées.";
+"form.newStation"        = "Nouvelle station";
+"form.editStation"       = "Modifier la station";
+
+/* History */
+"history.title"          = "Historique";
+"history.empty"          = "Aucun historique";
+"history.emptyDetail"    = "Les chansons écoutées apparaîtront ici automatiquement ou via Shazam.";
+"history.clearAll"       = "Tout effacer";
+"history.clearConfirm"   = "Effacer tout l'historique ?";
+"history.live"           = "En direct";
+
+/* Shazam */
+"shazam.identify"        = "Identifier";
+"shazam.listening"       = "Écoute…";
+"shazam.found"           = "Identifié";
+"shazam.noMatch"         = "Introuvable";
+"shazam.error"           = "Erreur";
+"shazam.title"           = "Shazam";
+"shazam.openAppleMusic"  = "Ouvrir dans Apple Music";
+"shazam.notFound"        = "Impossible d'identifier la chanson";
+"shazam.micDenied"       = "Accès au microphone refusé";
+
+/* Actions */
+"action.save"            = "Enregistrer";
+"action.cancel"          = "Annuler";
+"action.close"           = "Fermer";
+"action.retry"           = "Réessayer";
+"action.edit"            = "Modifier";

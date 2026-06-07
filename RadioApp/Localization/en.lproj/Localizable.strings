@@ -1,0 +1,61 @@
+/* Navigation */
+"app.title"              = "Radio";
+"tab.stations"           = "Stations";
+"tab.history"            = "History";
+
+/* Search */
+"search.title"           = "Find stations";
+"search.placeholder"     = "Station name…";
+"search.noResults"       = "No results";
+"search.error"           = "Could not connect";
+"filter.all"             = "All";
+
+/* Player bar */
+"player.live"            = "Live";
+"player.loading"         = "Connecting…";
+
+/* Settings */
+"settings.title"         = "Settings";
+"settings.stations"      = "Stations";
+"settings.addStation"    = "Add station";
+"settings.buffer"        = "Audio buffer";
+"settings.bufferFast"    = "2 s (fast)";
+"settings.bufferStable"  = "60 s (stable)";
+"settings.bufferFooter"  = "A larger buffer reduces dropouts on slow connections.";
+
+/* Station form */
+"form.name"              = "Name";
+"form.namePlaceholder"   = "E.g. BBC Radio 1";
+"form.url"               = "Stream URL (MP3)";
+"form.urlPlaceholder"    = "http://stream.example.com/radio.mp3";
+"form.logo"              = "Logo (image URL)";
+"form.logoPlaceholder"   = "https://example.com/logo.png";
+"form.logoFooter"        = "Optional. If left empty, initials are shown instead.";
+"form.newStation"        = "New station";
+"form.editStation"       = "Edit station";
+
+/* History */
+"history.title"          = "History";
+"history.empty"          = "No history yet";
+"history.emptyDetail"    = "Songs you listen to will appear here automatically or when identified with Shazam.";
+"history.clearAll"       = "Clear all";
+"history.clearConfirm"   = "Clear all history?";
+"history.live"           = "Live";
+
+/* Shazam */
+"shazam.identify"        = "Identify";
+"shazam.listening"       = "Listening…";
+"shazam.found"           = "Identified";
+"shazam.noMatch"         = "Not found";
+"shazam.error"           = "Error";
+"shazam.title"           = "Shazam";
+"shazam.openAppleMusic"  = "Open in Apple Music";
+"shazam.notFound"        = "Could not identify the song";
+"shazam.micDenied"       = "Microphone permission denied";
+
+/* Actions */
+"action.save"            = "Save";
+"action.cancel"          = "Cancel";
+"action.close"           = "Close";
+"action.retry"           = "Retry";
+"action.edit"            = "Edit";

@@ -1,0 +1,61 @@
+/* Navigation */
+"app.title"              = "Radio";
+"tab.stations"           = "Sender";
+"tab.history"            = "Verlauf";
+
+/* Search */
+"search.title"           = "Sender suchen";
+"search.placeholder"     = "Sendername…";
+"search.noResults"       = "Keine Ergebnisse";
+"search.error"           = "Verbindung fehlgeschlagen";
+"filter.all"             = "Alle";
+
+/* Player bar */
+"player.live"            = "Live";
+"player.loading"         = "Verbinde…";
+
+/* Settings */
+"settings.title"         = "Einstellungen";
+"settings.stations"      = "Sender";
+"settings.addStation"    = "Sender hinzufügen";
+"settings.buffer"        = "Audio-Puffer";
+"settings.bufferFast"    = "2 s (schnell)";
+"settings.bufferStable"  = "60 s (stabil)";
+"settings.bufferFooter"  = "Ein größerer Puffer reduziert Aussetzer bei langsamen Verbindungen.";
+
+/* Station form */
+"form.name"              = "Name";
+"form.namePlaceholder"   = "z. B. Deutschlandfunk";
+"form.url"               = "Stream-URL (MP3)";
+"form.urlPlaceholder"    = "http://stream.beispiel.de/radio.mp3";
+"form.logo"              = "Logo (Bild-URL)";
+"form.logoPlaceholder"   = "https://beispiel.de/logo.png";
+"form.logoFooter"        = "Optional. Ohne Angabe werden die Initialen angezeigt.";
+"form.newStation"        = "Neuer Sender";
+"form.editStation"       = "Sender bearbeiten";
+
+/* History */
+"history.title"          = "Verlauf";
+"history.empty"          = "Noch kein Verlauf";
+"history.emptyDetail"    = "Gehörte Songs erscheinen hier automatisch oder nach Shazam-Erkennung.";
+"history.clearAll"       = "Alles löschen";
+"history.clearConfirm"   = "Gesamten Verlauf löschen?";
+"history.live"           = "Live";
+
+/* Shazam */
+"shazam.identify"        = "Erkennen";
+"shazam.listening"       = "Hört zu…";
+"shazam.found"           = "Erkannt";
+"shazam.noMatch"         = "Nicht gefunden";
+"shazam.error"           = "Fehler";
+"shazam.title"           = "Shazam";
+"shazam.openAppleMusic"  = "In Apple Music öffnen";
+"shazam.notFound"        = "Song konnte nicht erkannt werden";
+"shazam.micDenied"       = "Mikrofonzugriff verweigert";
+
+/* Actions */
+"action.save"            = "Speichern";
+"action.cancel"          = "Abbrechen";
+"action.close"           = "Schließen";
+"action.retry"           = "Erneut versuchen";
+"action.edit"            = "Bearbeiten";
