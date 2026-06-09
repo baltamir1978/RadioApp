@@ -13,6 +13,7 @@ struct StationLogo: View {
                         image
                             .resizable()
                             .aspectRatio(contentMode: .fill)
+                            .background(Color.white)
                     default:
                         fallbackView
                     }

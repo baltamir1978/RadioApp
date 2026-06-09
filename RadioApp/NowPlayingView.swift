@@ -1,6 +1,6 @@
 import SwiftUI
 
-private let accent = Color(hex: "#FF6B35")
+private let accent = Color.brand
 
 // MARK: - Full-screen Now Playing
 
@@ -117,6 +117,12 @@ struct NowPlayingView: View {
 
                 Spacer()
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(
+                LinearGradient(colors: [Color.mintSurface, Color.appBackground],
+                               startPoint: .top, endPoint: .bottom)
+                    .ignoresSafeArea()
+            )
             .animation(.spring(duration: 0.4), value: shazam.match != nil)
             .onChange(of: shazam.match?.title) { _, _ in
                 if let m = shazam.match {
@@ -127,6 +133,8 @@ struct NowPlayingView: View {
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.mintSurface, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     // Live badge

@@ -23,8 +23,9 @@ struct ContentView: View {
                 }
             }
             .animation(.easeInOut(duration: 0.3), value: player.currentStation != nil)
+            .background(Color.appBackground.ignoresSafeArea())
         }
-        .tint(Color(hex: "#FF6B35"))
+        .tint(.brand)
         // Auto-save the live (ICY) track to history whenever it changes.
         .onChange(of: player.currentTrack) { _, track in
             if let track, let station = player.currentStation {
@@ -35,12 +36,12 @@ struct ContentView: View {
             StationSearchView()
                 .environmentObject(store)
                 .environmentObject(player)
-                .tint(Color(hex: "#FF6B35"))
+                .tint(.brand)
         }
         .sheet(isPresented: $showAdd) {
             AddStationView()
                 .environmentObject(store)
-                .tint(Color(hex: "#FF6B35"))
+                .tint(.brand)
         }
         .sheet(isPresented: $showHistory) {
             HistoryView()

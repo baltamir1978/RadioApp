@@ -6,11 +6,11 @@ import SwiftUI
     }
     .environmentObject(StationsStore())
     .environmentObject(RadioPlayer.shared)
-    .tint(Color(hex: "#FF6B35"))
+    .tint(.brand)
 }
 
 #Preview("Now Playing") {
     NowPlayingView()
         .environmentObject(RadioPlayer.shared)
-        .tint(Color(hex: "#FF6B35"))
+        .tint(.brand)
 }

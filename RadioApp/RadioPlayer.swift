@@ -101,6 +101,25 @@ class RadioPlayer: NSObject, ObservableObject {
         loadArtwork(preferredURL: station.logoURL, initials: station.initials, seed: station.name)
     }
 
+    /// Switches to the next station in the user's list (wraps around). Drives the
+    /// CarPlay / lock-screen "next track" control.
+    func playNext() {
+        let stations = StationsStore.shared.stations
+        guard !stations.isEmpty else { return }
+        let current = currentStation.flatMap { c in stations.firstIndex(where: { $0.streamURL == c.streamURL }) }
+        let nextIndex = ((current ?? -1) + 1) % stations.count
+        play(stations[nextIndex])
+    }
+
+    /// Switches to the previous station in the user's list (wraps around).
+    func playPrevious() {
+        let stations = StationsStore.shared.stations
+        guard !stations.isEmpty else { return }
+        let current = currentStation.flatMap { c in stations.firstIndex(where: { $0.streamURL == c.streamURL }) }
+        let prevIndex = ((current ?? 0) - 1 + stations.count) % stations.count
+        play(stations[prevIndex])
+    }
+
     func stop() {
         streamTap.remove()
         streamSink.set(nil)
@@ -114,6 +133,7 @@ class RadioPlayer: NSObject, ObservableObject {
         isLoading = false
         nowPlayingArtwork = nil
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        publishWidgetState()
     }
 
     func togglePlayPause() {
@@ -213,6 +233,16 @@ class RadioPlayer: NSObject, ObservableObject {
             Task { @MainActor in self?.stop() }
             return .success
         }
+        center.nextTrackCommand.isEnabled = true
+        center.nextTrackCommand.addTarget { [weak self] _ in
+            Task { @MainActor in self?.playNext() }
+            return .success
+        }
+        center.previousTrackCommand.isEnabled = true
+        center.previousTrackCommand.addTarget { [weak self] _ in
+            Task { @MainActor in self?.playPrevious() }
+            return .success
+        }
     }
 
     private func updateNowPlayingInfo() {
@@ -225,6 +255,22 @@ class RadioPlayer: NSObject, ObservableObject {
             info[MPMediaItemPropertyArtwork] = artwork
         }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        publishWidgetState()
+    }
+
+    /// Mirrors the current playback state into the App Group so the widget can show it.
+    private func publishWidgetState() {
+        if let station = currentStation {
+            WidgetShared.saveNowPlaying(NowPlayingSnapshot(
+                stationName: station.name,
+                track: currentTrack,
+                artist: currentArtist,
+                logoURL: station.logoURL,
+                isPlaying: isPlaying
+            ))
+        } else {
+            WidgetShared.saveNowPlaying(nil)
+        }
     }
 
     /// Enriches the lock screen when ShazamKit identifies the current track.

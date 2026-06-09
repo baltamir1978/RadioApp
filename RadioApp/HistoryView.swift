@@ -1,6 +1,6 @@
 import SwiftUI
 
-private let accent = Color(hex: "#FF6B35")
+private let accent = Color.brand
 
 struct HistoryView: View {
     @ObservedObject private var history = HistoryStore.shared
@@ -37,8 +37,11 @@ struct HistoryView: View {
                     songList
                 }
             }
+            .background(Color.appBackground.ignoresSafeArea())
             .navigationTitle(NSLocalizedString("history_title", comment: ""))
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.mintSurface, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(NSLocalizedString("close", comment: "")) { dismiss() }
@@ -80,6 +83,7 @@ struct HistoryView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
     }
 
     private var emptyState: some View {

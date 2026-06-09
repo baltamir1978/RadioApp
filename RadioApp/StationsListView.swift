@@ -34,27 +34,29 @@ struct StationsListView: View {
             .padding(.vertical, 8)
         }
         .navigationTitle(NSLocalizedString("my_stations", comment: ""))
+        .toolbarBackground(Color.mintSurface, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
         .toolbar {
             ToolbarItemGroup(placement: .navigationBarLeading) {
                 Button { showSettings = true } label: {
                     Image(systemName: "gearshape")
-                        .foregroundStyle(Color(hex: "#FF6B35"))
+                        .foregroundStyle(Color.brand)
                 }
                 EditButton()
-                    .foregroundStyle(Color(hex: "#FF6B35"))
+                    .foregroundStyle(Color.brand)
             }
             ToolbarItemGroup(placement: .navigationBarTrailing) {
                 Button { showHistory = true } label: {
                     Image(systemName: "music.note.list")
-                        .foregroundStyle(Color(hex: "#FF6B35"))
+                        .foregroundStyle(Color.brand)
                 }
                 Button { showSearch = true } label: {
                     Image(systemName: "magnifyingglass")
-                        .foregroundStyle(Color(hex: "#FF6B35"))
+                        .foregroundStyle(Color.brand)
                 }
                 Button { showAdd = true } label: {
                     Image(systemName: "plus")
-                        .foregroundStyle(Color(hex: "#FF6B35"))
+                        .foregroundStyle(Color.brand)
                 }
             }
         }
@@ -154,7 +156,7 @@ struct LiveIndicator: View {
         HStack(alignment: .bottom, spacing: 3) {
             ForEach(Array([10, 16, 12, 8].enumerated()), id: \.offset) { i, maxH in
                 RoundedRectangle(cornerRadius: 2)
-                    .fill(Color(hex: "#FF6B35"))
+                    .fill(Color.brand)
                     .frame(width: 3, height: isPlaying ? (phase ? CGFloat(maxH) : CGFloat(8 + (i * 2))) : 5)
                     .animation(
                         isPlaying

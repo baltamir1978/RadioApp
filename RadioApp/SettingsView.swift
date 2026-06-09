@@ -1,6 +1,6 @@
 import SwiftUI
 
-private let accent = Color(hex: "#FF6B35")
+private let accent = Color.brand
 
 struct SettingsView: View {
     @ObservedObject private var player = RadioPlayer.shared
@@ -49,8 +49,12 @@ struct SettingsView: View {
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(Color.appBackground.ignoresSafeArea())
             .navigationTitle(NSLocalizedString("settings_title", comment: ""))
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.mintSurface, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(NSLocalizedString("close", comment: "")) { dismiss() }

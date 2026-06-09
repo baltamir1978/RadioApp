@@ -15,6 +15,7 @@ class StationsStore: ObservableObject {
         if stations.isEmpty {
             stations = Station.defaults
         }
+        publishToWidget()
     }
 
     func add(_ station: Station) {
@@ -52,6 +53,16 @@ class StationsStore: ObservableObject {
         if let data = try? JSONEncoder().encode(stations) {
             UserDefaults.standard.set(data, forKey: saveKey)
         }
+        publishToWidget()
+    }
+
+    /// Shares the station list with the widget extension via the App Group.
+    private func publishToWidget() {
+        let mapped = stations.prefix(8).map {
+            WidgetStation(name: $0.name, streamURL: $0.streamURL,
+                          logoURL: $0.logoURL, initials: $0.initials)
+        }
+        WidgetShared.saveStations(Array(mapped))
     }
 
     private func load() {
@@ -65,9 +76,11 @@ extension Station {
     static let defaults: [Station] = [
         Station(name: "Vive Segovia",
                 streamURL: "https://streaming.viveradio.es/vivesegovia",
+                logoURL: "https://viveradio.es/dist/images/favicons/apple-touch-icon.webp",
                 country: "ES", genre: "Regional"),
         Station(name: "Cassette FM",
                 streamURL: "https://stream.costafm.es/listen/cassettefm_-_em/radio.mp3",
+                logoURL: "https://media.emisorasmusicales.net/wp-content/uploads/2021/05/11022133/Cassette.png",
                 country: "ES", genre: "Pop"),
         Station(name: "Cadena 100",
                 streamURL: "https://cadena100-cope-rrcast.flumotion.com/cope/cadena100-low.mp3",
@@ -75,9 +88,11 @@ extension Station {
                 country: "ES", genre: "Pop"),
         Station(name: "Kiss FM",
                 streamURL: "http://kissfm.kissfmradio.cires21.com/kissfm.mp3",
+                logoURL: "https://www.kissfm.es/wp-content/uploads/2024/10/Logo-KISS-FM_Negativo-Color.png",
                 country: "ES", genre: "Dance"),
         Station(name: "La Indie",
                 streamURL: "https://stream.emisorasmusicales.net/listen/la_indie/laindie.mp3",
+                logoURL: "https://media.emisorasmusicales.net/wp-content/uploads/2020/04/11023707/LA-INDIE.png",
                 country: "ES", genre: "Indie"),
         Station(name: "Los 40 Classic",
                 streamURL: "http://playerservices.streamtheworld.com/api/livestream-redirect/LOS40_CLASSIC.mp3",

@@ -66,6 +66,30 @@ final class HistoryStore: ObservableObject {
         save()
     }
 
+    /// Whether the track currently playing on `stationName` is already a kept favorite.
+    func isFavorite(title: String?, stationName: String?) -> Bool {
+        guard let title = title?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty,
+              let stationName else { return false }
+        return songs.first(where: { $0.stationName == stationName && $0.title == title })?.favorite ?? false
+    }
+
+    /// Toggles the favorite flag for the now-playing track, capturing it into history
+    /// first if it isn't there yet (e.g. favorited before any duplicate was logged).
+    /// Returns the resulting favorite state.
+    @discardableResult
+    func toggleFavoriteForNowPlaying(title: String, artist: String?, stationName: String) -> Bool {
+        let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanTitle.isEmpty else { return false }
+        if let idx = songs.firstIndex(where: { $0.stationName == stationName && $0.title == cleanTitle }) {
+            songs[idx].favorite.toggle()
+            save()
+            return songs[idx].favorite
+        }
+        insert(ListenedSong(title: cleanTitle, artist: artist, stationName: stationName,
+                            listenedAt: Date(), source: .icy, favorite: true))
+        return true
+    }
+
     // MARK: - Persistence
 
     private func insert(_ song: ListenedSong) {
