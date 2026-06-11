@@ -53,3 +53,5 @@
 "edit_station" = "Editar Emisora";
 "preview" = "Vista previa";
 "mic_denied" = "Permiso de micrófono denegado. Actívalo en Ajustes.";
+"pause" = "Pausa";
+"identify_song" = "Identificar canción";

@@ -87,7 +87,7 @@ extension Station {
                 logoURL: "https://www.cadena100.es/estaticos/apple-touch-icon-192x192.png",
                 country: "ES", genre: "Pop"),
         Station(name: "Kiss FM",
-                streamURL: "http://kissfm.kissfmradio.cires21.com/kissfm.mp3",
+                streamURL: "https://bbkissfm.kissfmradio.cires21.com/bbkissfm.mp3",
                 logoURL: "https://www.kissfm.es/wp-content/uploads/2024/10/Logo-KISS-FM_Negativo-Color.png",
                 country: "ES", genre: "Dance"),
         Station(name: "La Indie",

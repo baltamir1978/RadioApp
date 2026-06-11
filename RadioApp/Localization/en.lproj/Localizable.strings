@@ -53,3 +53,5 @@
 "edit_station" = "Edit Station";
 "preview" = "Preview";
 "mic_denied" = "Microphone access denied. Enable it in Settings.";
+"pause" = "Pause";
+"identify_song" = "Identify song";

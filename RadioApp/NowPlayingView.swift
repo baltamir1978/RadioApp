@@ -85,6 +85,7 @@ struct NowPlayingView: View {
 
                     // Shazam
                     Button {
+                        if !shazam.isListening { player.prepareForReidentify() }
                         shazam.identify()
                     } label: {
                         Image(systemName: shazam.isListening

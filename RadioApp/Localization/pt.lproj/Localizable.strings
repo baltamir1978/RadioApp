@@ -53,3 +53,5 @@
 "edit_station" = "Editar Estação";
 "preview" = "Pré-visualização";
 "mic_denied" = "Acesso ao microfone negado. Ative-o nas Definições.";
+"pause" = "Pausa";
+"identify_song" = "Identificar música";

@@ -45,6 +45,9 @@ class RadioPlayer: NSObject, ObservableObject {
     private var streamTapActive = false
     private var nowPlayingArtwork: MPMediaItemArtwork?
     private var artworkToken = 0
+    /// Whether `currentTrack` was filled in by ShazamKit (vs. stream metadata). Lets us
+    /// drop a stale Shazam title on re-identify without wiping real station metadata.
+    private var trackIsFromShazam = false
 
     private override init() {
         let saved = UserDefaults.standard.double(forKey: "buffer_duration")
@@ -61,6 +64,7 @@ class RadioPlayer: NSObject, ObservableObject {
         currentStation = station
         currentTrack = nil
         currentArtist = nil
+        trackIsFromShazam = false
         isLoading = true
 
         guard let url = URL(string: station.streamURL) else {
@@ -170,18 +174,31 @@ class RadioPlayer: NSObject, ObservableObject {
     private func handleMetadata(_ metadata: [AVMetadataItem]) async {
         for item in metadata {
             guard let raw = try? await item.load(.value),
-                  let title = raw as? String else { continue }
-            let parts = title.split(separator: "-", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
+                  let title = (raw as? String) else { continue }
+            let cleaned = title.trimmingCharacters(in: .whitespacesAndNewlines)
+            // Some stations (e.g. Los 40 Classic) broadcast a bare numeric rotation code in
+            // StreamTitle instead of the song. Ignore those so we neither show a meaningless
+            // number nor clobber a title ShazamKit already found.
+            guard Self.isMeaningfulTitle(cleaned) else { continue }
+            let parts = cleaned.split(separator: "-", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
             if parts.count == 2 {
                 currentArtist = parts[0]
                 currentTrack = parts[1]
             } else {
-                currentTrack = title
+                currentTrack = cleaned
                 currentArtist = nil
             }
+            trackIsFromShazam = false
             updateNowPlayingInfo()
             return
         }
+    }
+
+    /// A usable on-air title must contain at least one letter. Empty strings or values made
+    /// up only of digits/punctuation are station bookkeeping codes, not song names.
+    private static func isMeaningfulTitle(_ s: String) -> Bool {
+        guard !s.isEmpty else { return false }
+        return s.unicodeScalars.contains { CharacterSet.letters.contains($0) }
     }
 
     private func setupAudioSession() {
@@ -277,10 +294,26 @@ class RadioPlayer: NSObject, ObservableObject {
     func updateNowPlayingFromShazam(title: String, artist: String?, artworkURL: URL?) {
         currentTrack = title
         currentArtist = artist
+        trackIsFromShazam = true
         updateNowPlayingInfo()
         loadArtwork(preferredURL: artworkURL?.absoluteString,
                     initials: currentStation?.initials ?? "♪",
                     seed: currentStation?.name ?? title)
+    }
+
+    /// Called when the user re-runs identification. Drops a previous Shazam-derived title and
+    /// artwork so the screen doesn't keep showing the last song while we listen for the new
+    /// one. Real station metadata is left untouched.
+    func prepareForReidentify() {
+        guard trackIsFromShazam else { return }
+        currentTrack = nil
+        currentArtist = nil
+        trackIsFromShazam = false
+        nowPlayingArtwork = nil
+        updateNowPlayingInfo()
+        if let station = currentStation {
+            loadArtwork(preferredURL: station.logoURL, initials: station.initials, seed: station.name)
+        }
     }
 
     /// Loads lock-screen artwork (logo / song art, or drawn initials) off the main thread.

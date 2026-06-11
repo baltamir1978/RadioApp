@@ -53,3 +53,5 @@
 "edit_station" = "Sender bearbeiten";
 "preview" = "Vorschau";
 "mic_denied" = "Mikrofonzugriff verweigert. Aktiviere ihn in den Einstellungen.";
+"pause" = "Pause";
+"identify_song" = "Song erkennen";

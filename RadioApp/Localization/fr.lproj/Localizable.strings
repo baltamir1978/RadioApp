@@ -53,3 +53,5 @@
 "edit_station" = "Modifier la station";
 "preview" = "Aperçu";
 "mic_denied" = "Accès au micro refusé. Activez-le dans Réglages.";
+"pause" = "Pause";
+"identify_song" = "Identifier le titre";
