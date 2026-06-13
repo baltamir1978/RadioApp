@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct StationLogo: View {
     let station: Station
@@ -63,5 +64,12 @@ extension Color {
         let g = Double((int >> 8) & 0xFF) / 255
         let b = Double(int & 0xFF) / 255
         self.init(red: r, green: g, blue: b)
+    }
+
+    /// Builds a color that resolves to a different value in light vs. dark mode.
+    init(light: String, dark: String) {
+        self.init(uiColor: UIColor { traits in
+            UIColor(Color(hex: traits.userInterfaceStyle == .dark ? dark : light))
+        })
     }
 }
