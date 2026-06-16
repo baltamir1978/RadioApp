@@ -55,3 +55,7 @@
 "mic_denied" = "Acesso ao microfone negado. Ative-o nas Definições.";
 "pause" = "Pausa";
 "identify_song" = "Identificar música";
+
+/* Lyrics */
+"view_lyrics" = "Ver letra";
+"lyrics_unavailable" = "Letra indisponível";

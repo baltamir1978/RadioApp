@@ -55,3 +55,7 @@
 "mic_denied" = "Microphone access denied. Enable it in Settings.";
 "pause" = "Pause";
 "identify_song" = "Identify song";
+
+/* Lyrics */
+"view_lyrics" = "View lyrics";
+"lyrics_unavailable" = "Lyrics unavailable";

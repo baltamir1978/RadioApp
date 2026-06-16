@@ -39,6 +39,15 @@ struct NowPlayingView: View {
                             .font(.system(size: 13))
                             .foregroundStyle(.tertiary)
                             .padding(.top, 2)
+
+                        // Lyrics: links out to Apple Music in the published build; the
+                        // personal fork (LYRICS_EMBEDDED) swaps in an in-app panel.
+                        LyricsAccessory(
+                            title: track,
+                            artist: player.currentArtist,
+                            appleMusicURL: shazam.match?.title == track ? shazam.match?.appleMusicURL : nil
+                        )
+                        .padding(.top, 10)
                     } else {
                         Text(player.currentStation?.name ?? "")
                             .font(.system(size: 22, weight: .bold))

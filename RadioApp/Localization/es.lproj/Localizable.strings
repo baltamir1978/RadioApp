@@ -55,3 +55,7 @@
 "mic_denied" = "Permiso de micrófono denegado. Actívalo en Ajustes.";
 "pause" = "Pausa";
 "identify_song" = "Identificar canción";
+
+/* Lyrics */
+"view_lyrics" = "Ver letra";
+"lyrics_unavailable" = "Letra no disponible";

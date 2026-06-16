@@ -55,3 +55,7 @@
 "mic_denied" = "Mikrofonzugriff verweigert. Aktiviere ihn in den Einstellungen.";
 "pause" = "Pause";
 "identify_song" = "Song erkennen";
+
+/* Lyrics */
+"view_lyrics" = "Liedtext anzeigen";
+"lyrics_unavailable" = "Liedtext nicht verfügbar";

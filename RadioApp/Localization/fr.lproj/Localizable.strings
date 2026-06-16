@@ -55,3 +55,7 @@
 "mic_denied" = "Accès au micro refusé. Activez-le dans Réglages.";
 "pause" = "Pause";
 "identify_song" = "Identifier le titre";
+
+/* Lyrics */
+"view_lyrics" = "Voir les paroles";
+"lyrics_unavailable" = "Paroles indisponibles";
