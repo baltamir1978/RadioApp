@@ -93,7 +93,7 @@ class ShazamService: NSObject, ObservableObject, SHSessionDelegate {
         identifyTimer = nil
 
         if usingStreamTap {
-            RadioPlayer.shared.streamSink.set(nil)
+            RadioPlayer.shared.endStreamTap()
             usingStreamTap = false
         }
         matcher = nil
@@ -120,6 +120,7 @@ class ShazamService: NSObject, ObservableObject, SHSessionDelegate {
         let matcher = StreamMatcher(delegate: self)
         self.matcher = matcher
         usingStreamTap = true
+        RadioPlayer.shared.beginStreamTap()
         RadioPlayer.shared.streamSink.set { matcher.append($0) }
         identifyTimer = Timer.scheduledTimer(withTimeInterval: listenWindow, repeats: false) { [weak self] _ in
             Task { @MainActor [weak self] in self?.streamTapTimedOut() }
@@ -133,7 +134,7 @@ class ShazamService: NSObject, ObservableObject, SHSessionDelegate {
     private func streamTapTimedOut() {
         guard isListening, usingStreamTap else { return }
         let delivered = matcher?.bufferCount ?? 0
-        RadioPlayer.shared.streamSink.set(nil)
+        RadioPlayer.shared.endStreamTap()
         usingStreamTap = false
         matcher = nil
 

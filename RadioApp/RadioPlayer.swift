@@ -87,7 +87,6 @@ class RadioPlayer: NSObject, ObservableObject {
                 switch status {
                 case .readyToPlay:
                     self?.isLoading = false
-                    self?.activateStreamTap()
                 case .failed:
                     self?.isLoading = false
                     self?.isPlaying = false
@@ -154,6 +153,20 @@ class RadioPlayer: NSObject, ObservableObject {
             }
         }
         updateNowPlayingInfo()
+    }
+
+    /// Begins routing decoded stream PCM to `streamSink` for ShazamKit. Call only while
+    /// identifying — a permanently-attached MTAudioProcessingTap on a live stream stalls the
+    /// audio render once the app is backgrounded in CarPlay (radio cuts out after a few seconds
+    /// and the Now Playing baton passes to Apple Music). The item is already playing by the time
+    /// the user identifies, so its audio tracks are ready.
+    func beginStreamTap() { activateStreamTap() }
+
+    /// Detaches the passive tap when identification finishes, restoring untapped playback.
+    func endStreamTap() {
+        streamTap.remove()
+        streamSink.set(nil)
+        streamTapActive = false
     }
 
     /// Attaches a passive MTAudioProcessingTap once the item has audio tracks, routing
