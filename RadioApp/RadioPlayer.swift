@@ -2,6 +2,7 @@ import AVFoundation
 import Combine
 import SwiftUI
 import MediaPlayer
+import Network
 
 /// Thread-safe holder bridging the audio render thread (stream tap) to a consumer
 /// such as ShazamKit. The buffer handler is set/cleared on the main actor but
@@ -29,6 +30,9 @@ class RadioPlayer: NSObject, ObservableObject {
     @Published var isLoading = false
     @Published var currentTrack: String?
     @Published var currentArtist: String?
+    /// True while we are rebuilding a dropped connection. Lets the UI show "Reconnecting…"
+    /// instead of a dead Play button.
+    @Published var isReconnecting = false
     @Published var bufferDuration: Double {
         didSet { UserDefaults.standard.set(bufferDuration, forKey: "buffer_duration") }
     }
@@ -49,6 +53,37 @@ class RadioPlayer: NSObject, ObservableObject {
     /// drop a stale Shazam title on re-identify without wiping real station metadata.
     private var trackIsFromShazam = false
 
+    // MARK: Reconnection
+    /// True while the user wants audio. Survives transient network drops so the watchdog
+    /// knows to keep rebuilding the connection. Distinct from `isPlaying`, which tracks
+    /// whether audio is actually coming out right now.
+    private var intendsToPlay = false
+    private var timeControlObserver: NSKeyValueObservation?
+    /// Per-item NotificationCenter tokens (stall / failed-to-end), removed on teardown.
+    private var itemObservers: [NSObjectProtocol] = []
+    private var watchdogTask: Task<Void, Never>?
+    private var reconnectTask: Task<Void, Never>?
+    private var reconnectAttempt = 0
+    private let pathMonitor = NWPathMonitor()
+    private var hasNetwork = true
+    /// How long playback may sit stalled / waiting before we rebuild the connection.
+    private let stallGrace: TimeInterval = 5
+    /// Upper bound on the exponential backoff between reconnect attempts.
+    private let maxReconnectDelay: TimeInterval = 15
+
+    // MARK: Make-before-break (silent early reconnect)
+    /// Watches `isPlaybackLikelyToKeepUp` on the live item — the earliest hint that fresh data
+    /// stopped arriving, while the buffer is still draining and audio still plays.
+    private var bufferHealthObserver: NSKeyValueObservation?
+    /// A second connection opened in parallel while the current one is still playing its buffer.
+    /// Promoted (swapped in) once ready, so recovery has no silent gap.
+    private var standbyItem: AVPlayerItem?
+    private var standbyStatusObserver: NSKeyValueObservation?
+    private var preflightTask: Task<Void, Never>?
+    /// Grace after a buffer-health dip before we open the standby connection. Absorbs the brief
+    /// `isPlaybackLikelyToKeepUp` flicker that's normal on 5G, so we don't reconnect needlessly.
+    private let preflightGrace: TimeInterval = 1.5
+
     private override init() {
         let saved = UserDefaults.standard.double(forKey: "buffer_duration")
         bufferDuration = saved > 0 ? saved : 10.0
@@ -56,6 +91,7 @@ class RadioPlayer: NSObject, ObservableObject {
         setupAudioSession()
         setupRemoteControls()
         setupInterruptionHandling()
+        setupPathMonitor()
     }
 
     func play(_ station: Station) {
@@ -66,11 +102,25 @@ class RadioPlayer: NSObject, ObservableObject {
         currentArtist = nil
         trackIsFromShazam = false
         isLoading = true
+        intendsToPlay = true
+        reconnectAttempt = 0
 
-        guard let url = URL(string: station.streamURL) else {
+        guard startStream() else {
             isLoading = false
+            intendsToPlay = false
             return
         }
+
+        nowPlayingArtwork = nil
+        updateNowPlayingInfo()
+        loadArtwork(preferredURL: station.logoURL, initials: station.initials, seed: station.name)
+    }
+
+    /// Builds a fresh player item from `currentStation` and starts it. Shared by the initial
+    /// `play(_:)` and every reconnect attempt. Returns false only if the URL is unusable.
+    @discardableResult
+    private func startStream() -> Bool {
+        guard let station = currentStation, let url = URL(string: station.streamURL) else { return false }
 
         let item = AVPlayerItem(url: url)
         item.preferredForwardBufferDuration = bufferDuration
@@ -83,25 +133,35 @@ class RadioPlayer: NSObject, ObservableObject {
 
         statusObserver = item.observe(\.status, options: [.new]) { [weak self] item, _ in
             let status = item.status
-            Task { @MainActor [weak self] in
-                switch status {
-                case .readyToPlay:
-                    self?.isLoading = false
-                case .failed:
-                    self?.isLoading = false
-                    self?.isPlaying = false
-                default:
-                    break
-                }
-            }
+            Task { @MainActor [weak self] in self?.handleItemStatus(status) }
         }
+        attachStallObservers(to: item)
+        observeBufferHealth(of: item)
 
-        player = AVPlayer(playerItem: item)
-        player?.play()
+        let player = AVPlayer(playerItem: item)
+        player.automaticallyWaitsToMinimizeStalling = true
+        self.player = player
+        observeTimeControl(of: player)
+        player.play()
         isPlaying = true
-        nowPlayingArtwork = nil
-        updateNowPlayingInfo()
-        loadArtwork(preferredURL: station.logoURL, initials: station.initials, seed: station.name)
+        return true
+    }
+
+    private func handleItemStatus(_ status: AVPlayerItem.Status) {
+        switch status {
+        case .readyToPlay:
+            isLoading = false
+        case .failed:
+            // A live stream that errors out won't recover on its own — rebuild it.
+            if intendsToPlay {
+                scheduleReconnect()
+            } else {
+                isLoading = false
+                isPlaying = false
+            }
+        default:
+            break
+        }
     }
 
     /// Switches to the next station in the user's list (wraps around). Drives the
@@ -124,14 +184,9 @@ class RadioPlayer: NSObject, ObservableObject {
     }
 
     func stop() {
-        streamTap.remove()
-        streamSink.set(nil)
-        streamTapActive = false
-        player?.pause()
-        player = nil
-        playerItem = nil
-        statusObserver = nil
-        metadataOutput = nil
+        intendsToPlay = false
+        cancelReconnect()
+        teardownStream()
         isPlaying = false
         isLoading = false
         nowPlayingArtwork = nil
@@ -139,12 +194,33 @@ class RadioPlayer: NSObject, ObservableObject {
         publishWidgetState()
     }
 
+    /// Disposes the AVPlayer and its observers without touching the chosen station, the user's
+    /// intent to play, or the reconnect schedule — used between reconnect attempts and by `stop`.
+    private func teardownStream() {
+        cancelPreflight()
+        bufferHealthObserver = nil
+        streamTap.remove()
+        streamSink.set(nil)
+        streamTapActive = false
+        timeControlObserver = nil
+        statusObserver = nil
+        for token in itemObservers { NotificationCenter.default.removeObserver(token) }
+        itemObservers = []
+        player?.pause()
+        player = nil
+        playerItem = nil
+        metadataOutput = nil
+    }
+
     func togglePlayPause() {
         guard let station = currentStation else { return }
-        if isPlaying {
+        if isPlaying || isReconnecting {
+            intendsToPlay = false
+            cancelReconnect()
             player?.pause()
             isPlaying = false
         } else {
+            intendsToPlay = true
             if player == nil {
                 play(station)
             } else {
@@ -153,6 +229,224 @@ class RadioPlayer: NSObject, ObservableObject {
             }
         }
         updateNowPlayingInfo()
+    }
+
+    // MARK: - Reconnection
+
+    /// Watches for buffer-empty stalls and play-to-end failures on the live item. Both mean the
+    /// connection died and AVPlayer won't resume by itself, so we arm the reconnect watchdog.
+    private func attachStallObservers(to item: AVPlayerItem) {
+        let center = NotificationCenter.default
+        let stalled = center.addObserver(forName: .AVPlayerItemPlaybackStalled, object: item, queue: .main) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.armWatchdog() }
+        }
+        let failed = center.addObserver(forName: .AVPlayerItemFailedToPlayToEndTime, object: item, queue: .main) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.scheduleReconnect() }
+        }
+        itemObservers = [stalled, failed]
+    }
+
+    /// Tracks the player's time-control status. A live stream that drops parks in
+    /// `.waitingToPlayAtSpecifiedRate`; if it lingers there we rebuild the connection. Reaching
+    /// `.playing` means a (re)connect succeeded, so we clear the backoff and the spinner.
+    private func observeTimeControl(of player: AVPlayer) {
+        timeControlObserver = player.observe(\.timeControlStatus, options: [.new]) { [weak self] player, _ in
+            let status = player.timeControlStatus
+            Task { @MainActor [weak self] in self?.handleTimeControl(status) }
+        }
+    }
+
+    private func handleTimeControl(_ status: AVPlayer.TimeControlStatus) {
+        switch status {
+        case .playing:
+            isLoading = false
+            isReconnecting = false
+            reconnectAttempt = 0
+            disarmWatchdog()
+        case .waitingToPlayAtSpecifiedRate:
+            if intendsToPlay { armWatchdog() }
+        case .paused:
+            disarmWatchdog()
+        @unknown default:
+            break
+        }
+    }
+
+    /// One-shot timer: if the stream still isn't playing after `stallGrace`, reconnect.
+    /// Idempotent — repeated stall signals won't pile up timers.
+    private func armWatchdog() {
+        guard intendsToPlay, watchdogTask == nil else { return }
+        watchdogTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            try? await Task.sleep(nanoseconds: UInt64(self.stallGrace * 1_000_000_000))
+            self.watchdogTask = nil
+            guard !Task.isCancelled, self.intendsToPlay else { return }
+            if self.player?.timeControlStatus != .playing { self.scheduleReconnect() }
+        }
+    }
+
+    private func disarmWatchdog() {
+        watchdogTask?.cancel()
+        watchdogTask = nil
+    }
+
+    /// Tears down the stalled player and rebuilds it after an exponential backoff (capped at
+    /// `maxReconnectDelay`). Re-entrant safe: an in-flight attempt is cancelled and rescheduled.
+    private func scheduleReconnect() {
+        guard intendsToPlay else { return }
+        disarmWatchdog()
+        reconnectTask?.cancel()
+        isReconnecting = true
+
+        let delay = min(pow(2, Double(reconnectAttempt)), maxReconnectDelay)
+        reconnectAttempt += 1
+
+        reconnectTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            self.reconnectTask = nil
+            guard !Task.isCancelled, self.intendsToPlay else { return }
+            // No point rebuilding while the network is down; the path monitor will kick us
+            // the moment connectivity returns.
+            guard self.hasNetwork else { return }
+            self.teardownStream()
+            self.startStream()
+        }
+    }
+
+    private func cancelReconnect() {
+        disarmWatchdog()
+        cancelPreflight()
+        reconnectTask?.cancel()
+        reconnectTask = nil
+        isReconnecting = false
+        reconnectAttempt = 0
+    }
+
+    private func setupPathMonitor() {
+        pathMonitor.pathUpdateHandler = { [weak self] path in
+            let satisfied = path.status == .satisfied
+            Task { @MainActor [weak self] in self?.handleNetworkChange(satisfied: satisfied) }
+        }
+        pathMonitor.start(queue: DispatchQueue(label: "radio.path.monitor"))
+    }
+
+    /// Recovers instantly when connectivity returns (e.g. leaving a tunnel) instead of waiting
+    /// out the backoff. Only acts while already reconnecting, so it never disturbs healthy playback.
+    private func handleNetworkChange(satisfied: Bool) {
+        hasNetwork = satisfied
+        guard satisfied, intendsToPlay, isReconnecting else { return }
+        reconnectAttempt = 0
+        reconnectTask?.cancel()
+        reconnectTask = nil
+        scheduleReconnect()
+    }
+
+    // MARK: Make-before-break
+
+    /// Observes the playing item's buffer health. `isPlaybackLikelyToKeepUp` flips false the
+    /// instant fresh data stops arriving — earlier than any stall, while audio still plays from
+    /// the remaining buffer. That head start is what lets us reconnect silently.
+    private func observeBufferHealth(of item: AVPlayerItem) {
+        bufferHealthObserver = item.observe(\.isPlaybackLikelyToKeepUp, options: [.new]) { [weak self] item, _ in
+            let likely = item.isPlaybackLikelyToKeepUp
+            Task { @MainActor [weak self] in self?.handleBufferHealth(likelyToKeepUp: likely) }
+        }
+    }
+
+    private func handleBufferHealth(likelyToKeepUp likely: Bool) {
+        if likely {
+            // Buffer refilled on its own — it was just a flicker; abandon the pending standby.
+            cancelPreflight()
+        } else {
+            startPreflight()
+        }
+    }
+
+    /// After a buffer dip survives `preflightGrace`, opens a standby connection in the background.
+    /// Guards on `timeControlStatus == .playing` so this never fires during the initial connect
+    /// (when the buffer is legitimately not yet full).
+    private func startPreflight() {
+        guard intendsToPlay, hasNetwork, !isReconnecting,
+              standbyItem == nil, preflightTask == nil,
+              player?.timeControlStatus == .playing else { return }
+        preflightTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            try? await Task.sleep(nanoseconds: UInt64(self.preflightGrace * 1_000_000_000))
+            self.preflightTask = nil
+            // Still struggling after the grace (not a flicker) and nothing else already handling it?
+            guard !Task.isCancelled, self.intendsToPlay, self.hasNetwork, !self.isReconnecting,
+                  self.standbyItem == nil,
+                  self.player?.currentItem?.isPlaybackLikelyToKeepUp == false else { return }
+            self.buildStandby()
+        }
+    }
+
+    private func cancelPreflight() {
+        preflightTask?.cancel()
+        preflightTask = nil
+        discardStandby()
+    }
+
+    /// Opens a second connection to the same stream without touching the audio that's still
+    /// playing. When it reaches `.readyToPlay` we swap it in; if it fails, we drop it and let the
+    /// reactive stall watchdog take over.
+    private func buildStandby() {
+        guard let station = currentStation, let url = URL(string: station.streamURL) else { return }
+        let item = AVPlayerItem(url: url)
+        item.preferredForwardBufferDuration = bufferDuration
+        standbyItem = item
+        standbyStatusObserver = item.observe(\.status, options: [.new]) { [weak self] item, _ in
+            let status = item.status
+            Task { @MainActor [weak self] in
+                switch status {
+                case .readyToPlay: self?.promoteStandby()
+                case .failed: self?.discardStandby()
+                default: break
+                }
+            }
+        }
+    }
+
+    /// Swaps the ready standby item in for the struggling primary. The old buffer covers playback
+    /// right up to the swap, so there's no silent stall — at most a small jump to the live edge.
+    private func promoteStandby() {
+        guard intendsToPlay, let player, let standby = standbyItem else { discardStandby(); return }
+
+        // Detach the dying primary's observers / metadata / tap.
+        bufferHealthObserver = nil
+        statusObserver = nil
+        for token in itemObservers { NotificationCenter.default.removeObserver(token) }
+        itemObservers = []
+        streamTap.remove()
+        streamSink.set(nil)
+        streamTapActive = false
+
+        // Hand the standby its own metadata output and observers, then make it current.
+        standbyStatusObserver = nil
+        standbyItem = nil
+        let output = AVPlayerItemMetadataOutput(identifiers: nil)
+        metadataOutput = output
+        output.setDelegate(self, queue: .main)
+        standby.add(output)
+        playerItem = standby
+        statusObserver = standby.observe(\.status, options: [.new]) { [weak self] item, _ in
+            let status = item.status
+            Task { @MainActor [weak self] in self?.handleItemStatus(status) }
+        }
+        attachStallObservers(to: standby)
+        observeBufferHealth(of: standby)
+
+        player.replaceCurrentItem(with: standby)
+        player.play()
+        isPlaying = true
+        isReconnecting = false
+        reconnectAttempt = 0
+    }
+
+    private func discardStandby() {
+        standbyStatusObserver = nil
+        standbyItem = nil
     }
 
     /// Begins routing decoded stream PCM to `streamSink` for ShazamKit. Call only while

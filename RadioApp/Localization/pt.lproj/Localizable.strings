@@ -6,6 +6,7 @@
 /* Now Playing */
 "live" = "Ao vivo";
 "loading" = "Carregando...";
+"reconnecting" = "Reconectando...";
 "close" = "Fechar";
 "no_match_found" = "Nenhuma música encontrada";
 

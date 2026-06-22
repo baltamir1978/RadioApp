@@ -81,7 +81,7 @@ struct NowPlayingView: View {
                                 .frame(width: 76, height: 76)
                                 .shadow(color: accent.opacity(0.45), radius: 14, y: 5)
 
-                            if player.isLoading {
+                            if player.isLoading || player.isReconnecting {
                                 ProgressView().tint(.white)
                             } else {
                                 Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
@@ -194,7 +194,9 @@ struct NowPlayingBar: View {
                         if let track = player.currentTrack {
                             Text(track).lineLimit(1)
                         } else {
-                            Text(player.isLoading
+                            Text(player.isReconnecting
+                                 ? NSLocalizedString("reconnecting", comment: "")
+                                 : player.isLoading
                                  ? NSLocalizedString("loading", comment: "")
                                  : NSLocalizedString("live", comment: ""))
                         }
