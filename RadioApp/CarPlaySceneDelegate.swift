@@ -128,7 +128,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
     @MainActor
     private func handleShazamMatch(_ match: ShazamMatch) {
         let player = CarPlayBridge.shared.player
-        player.updateNowPlayingFromShazam(title: match.title, artist: match.artist, artworkURL: match.artworkURL)
+        player.updateNowPlayingFromShazam(title: match.title, artist: match.artist, artworkURL: match.artworkURL, appleMusicURL: match.appleMusicURL)
         if let station = player.currentStation {
             HistoryStore.shared.addFromShazam(match, stationName: station.name)
         }

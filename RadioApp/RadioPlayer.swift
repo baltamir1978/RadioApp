@@ -30,6 +30,12 @@ class RadioPlayer: NSObject, ObservableObject {
     @Published var isLoading = false
     @Published var currentTrack: String?
     @Published var currentArtist: String?
+    /// Cover art URL for the track on screen — a real album cover when we have one, else nil
+    /// (the UI falls back to the station logo). Filled from ShazamKit directly, or looked up
+    /// by artist+title for stations that only broadcast an ICY title.
+    @Published var currentArtworkURL: URL?
+    /// Apple Music link for the current track, whatever the source. Powers the lyrics link-out.
+    @Published var currentAppleMusicURL: URL?
     /// True while we are rebuilding a dropped connection. Lets the UI show "Reconnecting…"
     /// instead of a dead Play button.
     @Published var isReconnecting = false
@@ -49,6 +55,10 @@ class RadioPlayer: NSObject, ObservableObject {
     private var streamTapActive = false
     private var nowPlayingArtwork: MPMediaItemArtwork?
     private var artworkToken = 0
+    /// "artist|title" of the last resolved cover, so repeated ICY frames for the same song
+    /// don't re-hit the network. Bumped independently of `artworkToken` (image-load race).
+    private var lastArtworkKey: String?
+    private var artworkResolveToken = 0
     /// Whether `currentTrack` was filled in by ShazamKit (vs. stream metadata). Lets us
     /// drop a stale Shazam title on re-identify without wiping real station metadata.
     private var trackIsFromShazam = false
@@ -100,6 +110,9 @@ class RadioPlayer: NSObject, ObservableObject {
         currentStation = station
         currentTrack = nil
         currentArtist = nil
+        currentArtworkURL = nil
+        currentAppleMusicURL = nil
+        lastArtworkKey = nil
         trackIsFromShazam = false
         isLoading = true
         intendsToPlay = true
@@ -190,6 +203,9 @@ class RadioPlayer: NSObject, ObservableObject {
         isPlaying = false
         isLoading = false
         nowPlayingArtwork = nil
+        currentArtworkURL = nil
+        currentAppleMusicURL = nil
+        lastArtworkKey = nil
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
         publishWidgetState()
     }
@@ -496,7 +512,11 @@ class RadioPlayer: NSObject, ObservableObject {
                 currentArtist = nil
             }
             trackIsFromShazam = false
+            currentAppleMusicURL = nil
             updateNowPlayingInfo()
+            if let track = currentTrack {
+                resolveArtwork(track: track, artist: currentArtist, shazamURL: nil)
+            }
             return
         }
     }
@@ -598,14 +618,88 @@ class RadioPlayer: NSObject, ObservableObject {
     }
 
     /// Enriches the lock screen when ShazamKit identifies the current track.
-    func updateNowPlayingFromShazam(title: String, artist: String?, artworkURL: URL?) {
+    func updateNowPlayingFromShazam(title: String, artist: String?, artworkURL: URL?, appleMusicURL: URL?) {
         currentTrack = title
         currentArtist = artist
         trackIsFromShazam = true
+        currentAppleMusicURL = appleMusicURL
         updateNowPlayingInfo()
-        loadArtwork(preferredURL: artworkURL?.absoluteString,
+        resolveArtwork(track: title, artist: artist, shazamURL: artworkURL)
+    }
+
+    /// Single entry point for cover art, whatever the title's source. ShazamKit hands us an
+    /// artwork URL directly; stations that only broadcast an ICY title carry no image, so we
+    /// look one up by artist + title through the iTunes Search API (free, keyless). Keyed so
+    /// repeated identical metadata frames don't re-fetch, and token-guarded so a song change
+    /// in a continuous stream never leaves the previous track's cover on screen.
+    private func resolveArtwork(track: String, artist: String?, shazamURL: URL?) {
+        let key = "\(artist ?? "")|\(track)".lowercased()
+        // Shazam is authoritative and already holds the URL, so it may refresh even the same
+        // key; metadata lookups dedup to avoid hammering the network on repeated ICY frames.
+        if shazamURL == nil, key == lastArtworkKey { return }
+        lastArtworkKey = key
+        artworkResolveToken += 1
+        let token = artworkResolveToken
+
+        if let shazamURL {
+            applyCover(shazamURL, seedTrack: track)
+            return
+        }
+
+        // Metadata-only title: drop the old cover right away so the hero falls back to the
+        // station logo, then resolve the new cover by artist + title.
+        currentArtworkURL = nil
+        setLockScreenToStationLogo(seedTrack: track)
+        Task.detached(priority: .utility) { [weak self] in
+            let found = await Self.lookupCoverArt(track: track, artist: artist)
+            await MainActor.run {
+                guard let self, token == self.artworkResolveToken, let found else { return }
+                self.applyCover(found.artwork, seedTrack: track)
+                self.currentAppleMusicURL = found.appleMusic
+            }
+        }
+    }
+
+    private func applyCover(_ url: URL, seedTrack: String) {
+        currentArtworkURL = url
+        loadArtwork(preferredURL: url.absoluteString,
                     initials: currentStation?.initials ?? "♪",
-                    seed: currentStation?.name ?? title)
+                    seed: currentStation?.name ?? seedTrack)
+    }
+
+    private func setLockScreenToStationLogo(seedTrack: String) {
+        loadArtwork(preferredURL: currentStation?.logoURL,
+                    initials: currentStation?.initials ?? "♪",
+                    seed: currentStation?.name ?? seedTrack)
+    }
+
+    /// Looks up cover art + Apple Music link for a metadata-only title via the iTunes Search
+    /// API. Returns nil on any miss so the caller keeps the station logo.
+    private nonisolated static func lookupCoverArt(track: String, artist: String?) async -> (artwork: URL, appleMusic: URL?)? {
+        let term = [artist, track].compactMap { $0 }.joined(separator: " ")
+        guard !term.isEmpty, var comps = URLComponents(string: "https://itunes.apple.com/search") else { return nil }
+        comps.queryItems = [
+            URLQueryItem(name: "term", value: term),
+            URLQueryItem(name: "entity", value: "song"),
+            URLQueryItem(name: "limit", value: "1")
+        ]
+        guard let url = comps.url,
+              let (data, _) = try? await URLSession.shared.data(from: url),
+              let root = try? JSONDecoder().decode(ITunesSearchResponse.self, from: data),
+              let hit = root.results.first,
+              let art = hit.artworkUrl100 else { return nil }
+        // artworkUrl100 ends in ".../100x100bb.jpg"; ask for 600 for a crisp hero image.
+        let big = art.replacingOccurrences(of: "100x100bb", with: "600x600bb")
+        guard let artworkURL = URL(string: big) else { return nil }
+        return (artworkURL, hit.trackViewUrl.flatMap { URL(string: $0) })
+    }
+
+    private struct ITunesSearchResponse: Decodable {
+        let results: [Item]
+        struct Item: Decodable {
+            let artworkUrl100: String?
+            let trackViewUrl: String?
+        }
     }
 
     /// Called when the user re-runs identification. Drops a previous Shazam-derived title and
@@ -615,6 +709,9 @@ class RadioPlayer: NSObject, ObservableObject {
         guard trackIsFromShazam else { return }
         currentTrack = nil
         currentArtist = nil
+        currentArtworkURL = nil
+        currentAppleMusicURL = nil
+        lastArtworkKey = nil
         trackIsFromShazam = false
         nowPlayingArtwork = nil
         updateNowPlayingInfo()

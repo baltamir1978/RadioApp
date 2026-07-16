@@ -14,12 +14,31 @@ struct NowPlayingView: View {
             VStack(spacing: 0) {
                 Spacer()
 
-                // Station logo
-                if let station = player.currentStation {
-                    StationLogo(station: station, size: 200)
-                        .shadow(color: .black.opacity(0.15), radius: 24, y: 8)
-                        .padding(.bottom, 32)
+                // Hero: the recognized song's cover when we have one, otherwise the station
+                // logo. Cross-fades as songs change on a continuous broadcast.
+                Group {
+                    if let art = player.currentArtworkURL {
+                        AsyncImage(url: art) { phase in
+                            if let img = phase.image {
+                                img.resizable().aspectRatio(contentMode: .fill)
+                            } else if let station = player.currentStation {
+                                StationLogo(station: station, size: 200)
+                            } else {
+                                Color.mintSurface
+                            }
+                        }
+                        .frame(width: 200, height: 200)
+                        .clipShape(RoundedRectangle(cornerRadius: 24))
+                    } else if let station = player.currentStation {
+                        StationLogo(station: station, size: 200)
+                    }
                 }
+                .id(player.currentArtworkURL)
+                .transition(.opacity)
+                .frame(width: 200, height: 200)
+                .shadow(color: .black.opacity(0.15), radius: 24, y: 8)
+                .padding(.bottom, 32)
+                .animation(.easeInOut(duration: 0.35), value: player.currentArtworkURL)
 
                 // Now playing: song title (from stream metadata or Shazam) is the star
                 // when known; otherwise the station name leads.
@@ -35,17 +54,24 @@ struct NowPlayingView: View {
                                 .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.center)
                         }
-                        Text(player.currentStation?.name ?? "")
-                            .font(.system(size: 13))
-                            .foregroundStyle(.tertiary)
-                            .padding(.top, 2)
+                        // Keep the station's identity present even when the cover art has
+                        // taken over the hero: a small logo + name chip under the song.
+                        HStack(spacing: 6) {
+                            if let station = player.currentStation {
+                                StationLogo(station: station, size: 18)
+                            }
+                            Text(player.currentStation?.name ?? "")
+                                .font(.system(size: 13))
+                                .foregroundStyle(.tertiary)
+                        }
+                        .padding(.top, 2)
 
                         // Lyrics: links out to Apple Music in the published build; the
                         // personal fork (LYRICS_EMBEDDED) swaps in an in-app panel.
                         LyricsAccessory(
                             title: track,
                             artist: player.currentArtist,
-                            appleMusicURL: shazam.match?.title == track ? shazam.match?.appleMusicURL : nil
+                            appleMusicURL: player.currentAppleMusicURL
                         )
                         .padding(.top, 10)
                     } else {
@@ -136,7 +162,7 @@ struct NowPlayingView: View {
             .animation(.spring(duration: 0.4), value: shazam.match != nil)
             .onChange(of: shazam.match?.title) { _, _ in
                 if let m = shazam.match {
-                    player.updateNowPlayingFromShazam(title: m.title, artist: m.artist, artworkURL: m.artworkURL)
+                    player.updateNowPlayingFromShazam(title: m.title, artist: m.artist, artworkURL: m.artworkURL, appleMusicURL: m.appleMusicURL)
                     if let station = player.currentStation {
                         HistoryStore.shared.addFromShazam(m, stationName: station.name)
                     }
