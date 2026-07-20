@@ -15,6 +15,9 @@ final class HistoryStore: ObservableObject {
     /// user can review and undo entries from the ignore list.
     @Published private(set) var ignored: [IgnoredTitle] = []
 
+    /// Cover art resolved before its history entry existed; consumed by `addFromICY`.
+    private var pendingArtwork: (key: String, url: String, appleMusicURL: String?)?
+
     private let maxEntries = 500
     private let fileURL: URL = {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -53,8 +56,36 @@ final class HistoryStore: ObservableObject {
            last.stationName == stationName, last.title == title, last.source == .icy {
             return
         }
+        // A cover that was resolved before this entry existed is claimed here.
+        var artwork: String?
+        var appleMusic: String?
+        if let pending = pendingArtwork,
+           pending.key == IgnoredTitle.key(station: stationName, title: title) {
+            artwork = pending.url
+            appleMusic = pending.appleMusicURL
+            pendingArtwork = nil
+        }
         insert(ListenedSong(title: title, artist: artist,
-                            stationName: stationName, listenedAt: Date(), source: .icy))
+                            stationName: stationName, listenedAt: Date(),
+                            artworkURL: artwork, appleMusicURL: appleMusic, source: .icy))
+    }
+
+    /// Attaches the cover art resolved for a live track to its history entry, so the list
+    /// keeps showing the image after the song is gone. Cover lookups are asynchronous and can
+    /// land either side of the entry being created, so an image that arrives first is parked
+    /// as `pendingArtwork` and picked up by the next matching `addFromICY`.
+    func attachArtwork(url: String, appleMusicURL: String?, title: String, stationName: String) {
+        let key = IgnoredTitle.key(station: stationName, title: title)
+        if let idx = songs.firstIndex(where: {
+            IgnoredTitle.key(station: $0.stationName, title: $0.title) == key
+        }) {
+            guard songs[idx].artworkURL == nil else { return }
+            songs[idx].artworkURL = url
+            if songs[idx].appleMusicURL == nil { songs[idx].appleMusicURL = appleMusicURL }
+            save()
+        } else {
+            pendingArtwork = (key: key, url: url, appleMusicURL: appleMusicURL)
+        }
     }
 
     /// Saves a Shazam match; upgrades a recent ICY entry for the same station if present.

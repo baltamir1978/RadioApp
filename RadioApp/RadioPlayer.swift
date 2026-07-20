@@ -593,6 +593,9 @@ class RadioPlayer: NSObject, ObservableObject {
         var info: [String: Any] = [:]
         info[MPMediaItemPropertyTitle] = currentTrack ?? currentStation?.name ?? ""
         info[MPMediaItemPropertyArtist] = currentArtist ?? currentStation?.name ?? ""
+        // Third line on CarPlay / lock screen: without this the station name disappears as
+        // soon as a song supplies both title and artist.
+        info[MPMediaItemPropertyAlbumTitle] = currentStation?.name ?? ""
         info[MPNowPlayingInfoPropertyIsLiveStream] = true
         info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
         if let artwork = nowPlayingArtwork {
@@ -665,6 +668,13 @@ class RadioPlayer: NSObject, ObservableObject {
         loadArtwork(preferredURL: url.absoluteString,
                     initials: currentStation?.initials ?? "♪",
                     seed: currentStation?.name ?? seedTrack)
+        // Keep the cover with the track in history, so the list still shows it later.
+        if let station = currentStation {
+            HistoryStore.shared.attachArtwork(url: url.absoluteString,
+                                              appleMusicURL: currentAppleMusicURL?.absoluteString,
+                                              title: seedTrack,
+                                              stationName: station.name)
+        }
     }
 
     private func setLockScreenToStationLogo(seedTrack: String) {
