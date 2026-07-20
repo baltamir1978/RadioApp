@@ -3,6 +3,12 @@ import Combine
 import SwiftUI
 import MediaPlayer
 import Network
+import os
+
+/// Playback / reconnection tracing. Visible in Console.app (and `xcrun simctl spawn … log stream`)
+/// under subsystem `com.radioapp.playback` — the only practical way to see why a stream failed to
+/// start while driving, since the symptom (silent play/pause flicker) looks identical whatever the cause.
+private let playbackLog = Logger(subsystem: "com.radioapp.playback", category: "stream")
 
 /// Thread-safe holder bridging the audio render thread (stream tap) to a consumer
 /// such as ShazamKit. The buffer handler is set/cleared on the main actor but
@@ -76,8 +82,15 @@ class RadioPlayer: NSObject, ObservableObject {
     private var reconnectAttempt = 0
     private let pathMonitor = NWPathMonitor()
     private var hasNetwork = true
-    /// How long playback may sit stalled / waiting before we rebuild the connection.
+    /// How long established playback may sit stalled before we rebuild the connection.
     private let stallGrace: TimeInterval = 5
+    /// How long a *fresh* connection may sit buffering before we give up on it. Far longer than
+    /// `stallGrace`: filling `preferredForwardBufferDuration` on a slow cellular link legitimately
+    /// takes more than a few seconds, and tearing it down at 5s means the stream never starts at all.
+    private let connectGrace: TimeInterval = 25
+    /// Whether the current connection ever reached `.playing`. Distinguishes "still connecting"
+    /// from "was playing and dropped", which need very different patience.
+    private var hasPlayedSinceConnect = false
     /// Upper bound on the exponential backoff between reconnect attempts.
     private let maxReconnectDelay: TimeInterval = 15
 
@@ -88,7 +101,17 @@ class RadioPlayer: NSObject, ObservableObject {
     /// A second connection opened in parallel while the current one is still playing its buffer.
     /// Promoted (swapped in) once ready, so recovery has no silent gap.
     private var standbyItem: AVPlayerItem?
+    /// The standby item needs its own (muted, never-played) AVPlayer: an AVPlayerItem that isn't
+    /// attached to a player never starts loading, so its status would sit at `.unknown` forever.
+    private var standbyPlayer: AVPlayer?
     private var standbyStatusObserver: NSKeyValueObservation?
+    private var standbyTimeoutTask: Task<Void, Never>?
+    /// Loopback proxies feeding the live and standby items; each lives as long as its item.
+    private var streamProxy: LocalStreamProxy?
+    private var standbyProxy: LocalStreamProxy?
+    /// How long a standby connection may take to become ready before we drop it and fall back to
+    /// the reactive watchdog. Without this a hung standby would block every later preflight.
+    private let standbyTimeout: TimeInterval = 20
     private var preflightTask: Task<Void, Never>?
     /// Grace after a buffer-health dip before we open the standby connection. Absorbs the brief
     /// `isPlaybackLikelyToKeepUp` flicker that's normal on 5G, so we don't reconnect needlessly.
@@ -135,9 +158,11 @@ class RadioPlayer: NSObject, ObservableObject {
     private func startStream() -> Bool {
         guard let station = currentStation, let url = URL(string: station.streamURL) else { return false }
 
-        let item = AVPlayerItem(url: url)
-        item.preferredForwardBufferDuration = bufferDuration
+        let (item, proxy) = makeItem(for: url)
         playerItem = item
+        streamProxy?.stop()
+        streamProxy = proxy
+        hasPlayedSinceConnect = false
 
         let output = AVPlayerItemMetadataOutput(identifiers: nil)
         metadataOutput = output
@@ -160,11 +185,31 @@ class RadioPlayer: NSObject, ObservableObject {
         return true
     }
 
+    /// Builds a player item for a stream URL. Continuous live audio goes through
+    /// `LocalStreamProxy`, which relays it without byte-range requests — some broadcast servers
+    /// answer those with an overflowed length that AVPlayer can't play at all (see that class).
+    /// HLS keeps AVFoundation's own stack, which genuinely needs range access; and if the proxy
+    /// can't start for any reason we fall back to playing the URL directly.
+    private func makeItem(for url: URL) -> (AVPlayerItem, LocalStreamProxy?) {
+        let item: AVPlayerItem
+        var proxy: LocalStreamProxy?
+        if url.pathExtension.lowercased() != "m3u8",
+           let live = LocalStreamProxy(originURL: url), let localURL = live.localURL {
+            item = AVPlayerItem(url: localURL)
+            proxy = live
+        } else {
+            item = AVPlayerItem(url: url)
+        }
+        item.preferredForwardBufferDuration = bufferDuration
+        return (item, proxy)
+    }
+
     private func handleItemStatus(_ status: AVPlayerItem.Status) {
         switch status {
         case .readyToPlay:
             isLoading = false
         case .failed:
+            playbackLog.error("item failed: \(String(describing: self.playerItem?.error), privacy: .public)")
             // A live stream that errors out won't recover on its own — rebuild it.
             if intendsToPlay {
                 scheduleReconnect()
@@ -226,6 +271,8 @@ class RadioPlayer: NSObject, ObservableObject {
         player = nil
         playerItem = nil
         metadataOutput = nil
+        streamProxy?.stop()
+        streamProxy = nil
     }
 
     func togglePlayPause() {
@@ -256,8 +303,12 @@ class RadioPlayer: NSObject, ObservableObject {
         let stalled = center.addObserver(forName: .AVPlayerItemPlaybackStalled, object: item, queue: .main) { [weak self] _ in
             Task { @MainActor [weak self] in self?.armWatchdog() }
         }
-        let failed = center.addObserver(forName: .AVPlayerItemFailedToPlayToEndTime, object: item, queue: .main) { [weak self] _ in
-            Task { @MainActor [weak self] in self?.scheduleReconnect() }
+        let failed = center.addObserver(forName: .AVPlayerItemFailedToPlayToEndTime, object: item, queue: .main) { [weak self] note in
+            let err = note.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey]
+            Task { @MainActor [weak self] in
+                playbackLog.error("failed-to-play-to-end: \(String(describing: err), privacy: .public)")
+                self?.scheduleReconnect()
+            }
         }
         itemObservers = [stalled, failed]
     }
@@ -275,9 +326,11 @@ class RadioPlayer: NSObject, ObservableObject {
     private func handleTimeControl(_ status: AVPlayer.TimeControlStatus) {
         switch status {
         case .playing:
+            if !hasPlayedSinceConnect { playbackLog.notice("playing — audio started") }
             isLoading = false
             isReconnecting = false
             reconnectAttempt = 0
+            hasPlayedSinceConnect = true
             disarmWatchdog()
         case .waitingToPlayAtSpecifiedRate:
             if intendsToPlay { armWatchdog() }
@@ -288,16 +341,21 @@ class RadioPlayer: NSObject, ObservableObject {
         }
     }
 
-    /// One-shot timer: if the stream still isn't playing after `stallGrace`, reconnect.
+    /// One-shot timer: if the stream still isn't playing after the applicable grace, reconnect.
     /// Idempotent — repeated stall signals won't pile up timers.
     private func armWatchdog() {
         guard intendsToPlay, watchdogTask == nil else { return }
+        // A connection that has never played is still buffering, not stalled — give it room.
+        let grace = hasPlayedSinceConnect ? stallGrace : connectGrace
         watchdogTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            try? await Task.sleep(nanoseconds: UInt64(self.stallGrace * 1_000_000_000))
+            try? await Task.sleep(nanoseconds: UInt64(grace * 1_000_000_000))
             self.watchdogTask = nil
             guard !Task.isCancelled, self.intendsToPlay else { return }
-            if self.player?.timeControlStatus != .playing { self.scheduleReconnect() }
+            if self.player?.timeControlStatus != .playing {
+                playbackLog.notice("watchdog fired after \(grace, privacy: .public)s (hasPlayed=\(self.hasPlayedSinceConnect, privacy: .public)) → reconnect")
+                self.scheduleReconnect()
+            }
         }
     }
 
@@ -325,6 +383,7 @@ class RadioPlayer: NSObject, ObservableObject {
             // No point rebuilding while the network is down; the path monitor will kick us
             // the moment connectivity returns.
             guard self.hasNetwork else { return }
+            playbackLog.notice("rebuilding connection (attempt \(self.reconnectAttempt, privacy: .public))")
             self.teardownStream()
             self.startStream()
         }
@@ -409,9 +468,9 @@ class RadioPlayer: NSObject, ObservableObject {
     /// reactive stall watchdog take over.
     private func buildStandby() {
         guard let station = currentStation, let url = URL(string: station.streamURL) else { return }
-        let item = AVPlayerItem(url: url)
-        item.preferredForwardBufferDuration = bufferDuration
+        let (item, proxy) = makeItem(for: url)
         standbyItem = item
+        standbyProxy = proxy
         standbyStatusObserver = item.observe(\.status, options: [.new]) { [weak self] item, _ in
             let status = item.status
             Task { @MainActor [weak self] in
@@ -421,6 +480,19 @@ class RadioPlayer: NSObject, ObservableObject {
                 default: break
                 }
             }
+        }
+        // Attaching to a player is what actually opens the connection. It stays muted and paused,
+        // so the buffer fills silently underneath the audio still coming from the primary.
+        let warmup = AVPlayer(playerItem: item)
+        warmup.isMuted = true
+        warmup.automaticallyWaitsToMinimizeStalling = true
+        standbyPlayer = warmup
+
+        standbyTimeoutTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            try? await Task.sleep(nanoseconds: UInt64(self.standbyTimeout * 1_000_000_000))
+            guard !Task.isCancelled, self.standbyItem === item else { return }
+            self.discardStandby()
         }
     }
 
@@ -440,7 +512,16 @@ class RadioPlayer: NSObject, ObservableObject {
 
         // Hand the standby its own metadata output and observers, then make it current.
         standbyStatusObserver = nil
+        standbyTimeoutTask?.cancel()
+        standbyTimeoutTask = nil
         standbyItem = nil
+        // An item can only belong to one player — release it from the warm-up player first.
+        standbyPlayer?.replaceCurrentItem(with: nil)
+        standbyPlayer = nil
+        // The standby's proxy now backs the live item; the outgoing one can go.
+        streamProxy?.stop()
+        streamProxy = standbyProxy
+        standbyProxy = nil
         let output = AVPlayerItemMetadataOutput(identifiers: nil)
         metadataOutput = output
         output.setDelegate(self, queue: .main)
@@ -458,11 +539,20 @@ class RadioPlayer: NSObject, ObservableObject {
         isPlaying = true
         isReconnecting = false
         reconnectAttempt = 0
+        // The standby was already buffered and ready, so this connection counts as live: a dip
+        // right after the swap is a real stall, not a slow first connect.
+        hasPlayedSinceConnect = true
     }
 
     private func discardStandby() {
         standbyStatusObserver = nil
+        standbyTimeoutTask?.cancel()
+        standbyTimeoutTask = nil
+        standbyPlayer?.replaceCurrentItem(with: nil)
+        standbyPlayer = nil
         standbyItem = nil
+        standbyProxy?.stop()
+        standbyProxy = nil
     }
 
     /// Begins routing decoded stream PCM to `streamSink` for ShazamKit. Call only while
