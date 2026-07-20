@@ -37,6 +37,15 @@
 "history_clear_confirm" = "Gesamten Verlauf löschen?";
 "history_empty" = "Noch kein Verlauf";
 "history_empty_detail" = "Gespielte Songs erscheinen hier automatisch oder wenn du sie mit Shazam erkennst.";
+"history_delete" = "Löschen";
+"history_ignore" = "Endgültig löschen";
+
+/* Ignored titles */
+"ignored_title" = "Ignoriert";
+"ignored_empty" = "Keine ignorierten Titel";
+"ignored_empty_detail" = "Wenn du einen automatisch gespeicherten Titel endgültig löschst, erscheint er hier zum Wiederherstellen.";
+"ignored_restore" = "Wiederherstellen";
+"ignored_footer" = "Diese Titel werden für ihren Sender nicht automatisch gespeichert. Zum Wiederherstellen wischen.";
 
 /* Settings */
 "settings_title" = "Einstellungen";

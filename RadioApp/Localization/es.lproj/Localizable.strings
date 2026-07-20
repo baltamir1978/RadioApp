@@ -37,6 +37,15 @@
 "history_clear_confirm" = "¿Borrar todo el historial?";
 "history_empty" = "Sin historial todavía";
 "history_empty_detail" = "Las canciones que suenen aparecerán aquí automáticamente o al identificarlas con Shazam.";
+"history_delete" = "Borrar";
+"history_ignore" = "Borrar del todo";
+
+/* Ignored titles */
+"ignored_title" = "Ignorados";
+"ignored_empty" = "Sin títulos ignorados";
+"ignored_empty_detail" = "Cuando borres del todo un título auto-guardado, aparecerá aquí para que puedas revertirlo.";
+"ignored_restore" = "Restaurar";
+"ignored_footer" = "Estos títulos no se guardarán automáticamente en su emisora. Desliza para restaurar.";
 
 /* Settings */
 "settings_title" = "Ajustes";

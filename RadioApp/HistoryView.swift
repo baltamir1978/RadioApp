@@ -8,6 +8,7 @@ struct HistoryView: View {
     @ObservedObject private var player = RadioPlayer.shared
     @Environment(\.dismiss) private var dismiss
     @State private var showClearConfirm = false
+    @State private var showIgnored = false
 
     private var grouped: [(String, [ListenedSong])] {
         let formatter = DateFormatter()
@@ -46,6 +47,16 @@ struct HistoryView: View {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(NSLocalizedString("close", comment: "")) { dismiss() }
                 }
+                if !history.ignored.isEmpty {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button {
+                            showIgnored = true
+                        } label: {
+                            Image(systemName: "nosign")
+                        }
+                        .accessibilityLabel(NSLocalizedString("ignored_title", comment: ""))
+                    }
+                }
                 if !history.songs.isEmpty {
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button(role: .destructive) {
@@ -57,6 +68,7 @@ struct HistoryView: View {
                     }
                 }
             }
+            .sheet(isPresented: $showIgnored) { IgnoredListView() }
             .confirmationDialog(NSLocalizedString("history_clear_confirm", comment: ""),
                                 isPresented: $showClearConfirm, titleVisibility: .visible) {
                 Button(NSLocalizedString("history_clear_all", comment: ""), role: .destructive) { history.clearAll() }
@@ -72,12 +84,24 @@ struct HistoryView: View {
                 Section(day) {
                     ForEach(songs) { song in
                         SongHistoryRow(song: song) { playStation(named: $0) }
-                    }
-                    .onDelete { offsets in
-                        let ids = Set(offsets.map { songs[$0].id })
-                        history.delete(at: IndexSet(
-                            history.songs.indices.filter { ids.contains(history.songs[$0].id) }
-                        ))
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button(role: .destructive) {
+                                    history.delete(song)
+                                } label: {
+                                    Label(NSLocalizedString("history_delete", comment: ""),
+                                          systemImage: "trash")
+                                }
+                                // "Delete for good" only makes sense for auto-captured tracks.
+                                if song.source == .icy && !song.favorite {
+                                    Button {
+                                        history.ignoreAndPurge(song)
+                                    } label: {
+                                        Label(NSLocalizedString("history_ignore", comment: ""),
+                                              systemImage: "nosign")
+                                    }
+                                    .tint(.orange)
+                                }
+                            }
                     }
                 }
             }
@@ -193,5 +217,68 @@ struct SongHistoryRow: View {
             Color(.secondarySystemFill)
             Image(systemName: "music.note").font(.system(size: 18)).foregroundStyle(.secondary)
         }
+    }
+}
+
+// MARK: - Ignored titles
+
+/// Lets the user review and undo the per-station titles they chose to ignore.
+struct IgnoredListView: View {
+    @ObservedObject private var history = HistoryStore.shared
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if history.ignored.isEmpty {
+                    ContentUnavailableView {
+                        Label(NSLocalizedString("ignored_empty", comment: ""), systemImage: "nosign")
+                    } description: {
+                        Text(NSLocalizedString("ignored_empty_detail", comment: ""))
+                    }
+                } else {
+                    List {
+                        Section {
+                            ForEach(history.ignored) { entry in
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(entry.title)
+                                        .font(.subheadline.weight(.semibold))
+                                        .lineLimit(1)
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "radio").font(.caption2)
+                                        Text(entry.stationName).font(.caption)
+                                    }
+                                    .foregroundStyle(.secondary)
+                                }
+                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                    Button {
+                                        history.unignore(entry)
+                                    } label: {
+                                        Label(NSLocalizedString("ignored_restore", comment: ""),
+                                              systemImage: "arrow.uturn.backward")
+                                    }
+                                    .tint(accent)
+                                }
+                            }
+                        } footer: {
+                            Text(NSLocalizedString("ignored_footer", comment: ""))
+                        }
+                    }
+                    .listStyle(.insetGrouped)
+                    .scrollContentBackground(.hidden)
+                }
+            }
+            .background(Color.appBackground.ignoresSafeArea())
+            .navigationTitle(NSLocalizedString("ignored_title", comment: ""))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.mintSurface, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(NSLocalizedString("close", comment: "")) { dismiss() }
+                }
+            }
+        }
+        .tint(accent)
     }
 }

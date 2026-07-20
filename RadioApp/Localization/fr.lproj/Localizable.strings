@@ -37,6 +37,15 @@
 "history_clear_confirm" = "Effacer tout l'historique ?";
 "history_empty" = "Aucun historique";
 "history_empty_detail" = "Les morceaux diffusés apparaîtront ici automatiquement ou lors de leur identification avec Shazam.";
+"history_delete" = "Supprimer";
+"history_ignore" = "Supprimer définitivement";
+
+/* Ignored titles */
+"ignored_title" = "Ignorés";
+"ignored_empty" = "Aucun titre ignoré";
+"ignored_empty_detail" = "Quand vous supprimez définitivement un titre enregistré automatiquement, il apparaît ici pour pouvoir l'annuler.";
+"ignored_restore" = "Restaurer";
+"ignored_footer" = "Ces titres ne seront pas enregistrés automatiquement sur leur station. Balayez pour restaurer.";
 
 /* Settings */
 "settings_title" = "Réglages";

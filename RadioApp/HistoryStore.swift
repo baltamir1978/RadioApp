@@ -10,20 +10,45 @@ final class HistoryStore: ObservableObject {
 
     @Published private(set) var songs: [ListenedSong] = []
 
+    /// Per-station titles the user chose to never auto-save again (station slogans /
+    /// jingles like "la mejor variedad musical"). Keeps the readable title so the
+    /// user can review and undo entries from the ignore list.
+    @Published private(set) var ignored: [IgnoredTitle] = []
+
     private let maxEntries = 500
     private let fileURL: URL = {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         return docs.appendingPathComponent("history.json")
     }()
+    private let ignoredFileURL: URL = {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        return docs.appendingPathComponent("ignored_titles.json")
+    }()
 
-    private init() { load() }
+    private init() { load(); loadIgnored() }
+
+    // MARK: - Ignore list
+
+    /// Whether an auto-captured title is on the user's per-station ignore list.
+    func isIgnored(title: String, stationName: String) -> Bool {
+        let key = IgnoredTitle.key(station: stationName, title: title)
+        return ignored.contains { $0.key == key }
+    }
+
+    /// Removes an entry from the ignore list, so its title will be auto-saved again.
+    func unignore(_ entry: IgnoredTitle) {
+        ignored.removeAll { $0.id == entry.id }
+        saveIgnored()
+    }
 
     // MARK: - Capture
 
-    /// Auto-saves a track read from stream (ICY) metadata, skipping consecutive duplicates.
+    /// Auto-saves a track read from stream (ICY) metadata, skipping consecutive duplicates
+    /// and titles the user has chosen to ignore for this station.
     func addFromICY(track: String, artist: String?, stationName: String) {
         let title = track.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty else { return }
+        guard !isIgnored(title: title, stationName: stationName) else { return }
         if let last = songs.first,
            last.stationName == stationName, last.title == title, last.source == .icy {
             return
@@ -58,6 +83,27 @@ final class HistoryStore: ObservableObject {
 
     func delete(at offsets: IndexSet) { songs.remove(atOffsets: offsets); save() }
     func clearAll() { songs.removeAll(); save() }
+
+    /// Removes just this one entry.
+    func delete(_ song: ListenedSong) {
+        songs.removeAll { $0.id == song.id }
+        save()
+    }
+
+    /// "Delete for good": ignores this title on its station from now on and purges every
+    /// auto-captured copy already in history. Kept (♥) and Shazam entries are left alone.
+    func ignoreAndPurge(_ song: ListenedSong) {
+        let entry = IgnoredTitle(stationName: song.stationName, title: song.title)
+        if !ignored.contains(where: { $0.key == entry.key }) {
+            ignored.insert(entry, at: 0)
+            saveIgnored()
+        }
+        songs.removeAll {
+            $0.source == .icy && !$0.favorite &&
+            IgnoredTitle.key(station: $0.stationName, title: $0.title) == entry.key
+        }
+        save()
+    }
 
     /// Toggle the "kept" flag on an auto-captured track.
     func toggleFavorite(_ song: ListenedSong) {
@@ -108,5 +154,36 @@ final class HistoryStore: ObservableObject {
         guard let data = try? Data(contentsOf: fileURL),
               let decoded = try? JSONDecoder().decode([ListenedSong].self, from: data) else { return }
         songs = decoded
+    }
+
+    private func saveIgnored() {
+        if let data = try? JSONEncoder().encode(ignored) {
+            try? data.write(to: ignoredFileURL, options: .atomic)
+        }
+    }
+
+    private func loadIgnored() {
+        guard let data = try? Data(contentsOf: ignoredFileURL),
+              let decoded = try? JSONDecoder().decode([IgnoredTitle].self, from: data) else { return }
+        ignored = decoded
+    }
+}
+
+/// A station-specific title the user chose to keep out of the auto-saved history.
+struct IgnoredTitle: Identifiable, Codable, Hashable {
+    var stationName: String
+    var title: String
+
+    /// Match key: case- and accent-insensitive, scoped to the station.
+    var key: String { Self.key(station: stationName, title: title) }
+    var id: String { key }
+
+    static func key(station: String, title: String) -> String {
+        normalize(station) + "\n" + normalize(title)
+    }
+
+    private static func normalize(_ s: String) -> String {
+        s.trimmingCharacters(in: .whitespacesAndNewlines)
+         .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
     }
 }
