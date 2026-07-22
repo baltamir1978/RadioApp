@@ -681,11 +681,23 @@ class RadioPlayer: NSObject, ObservableObject {
 
     private func updateNowPlayingInfo() {
         var info: [String: Any] = [:]
-        info[MPMediaItemPropertyTitle] = currentTrack ?? currentStation?.name ?? ""
-        info[MPMediaItemPropertyArtist] = currentArtist ?? currentStation?.name ?? ""
-        // Third line on CarPlay / lock screen: without this the station name disappears as
-        // soon as a song supplies both title and artist.
-        info[MPMediaItemPropertyAlbumTitle] = currentStation?.name ?? ""
+        let station = currentStation?.name ?? ""
+        let track = (currentTrack ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let artist = (currentArtist ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        // Title / artist / album are stacked as three lines on the lock screen and CarPlay.
+        // Each one is only filled when it says something the lines above don't: falling back
+        // to the station name for every empty field printed it three times over between songs.
+        // A stream whose StreamTitle is just the station's own name counts as "no song".
+        let hasSong = !track.isEmpty && track.caseInsensitiveCompare(station) != .orderedSame
+        info[MPMediaItemPropertyTitle] = hasSong ? track : station
+        if hasSong, !artist.isEmpty, artist.caseInsensitiveCompare(station) != .orderedSame {
+            info[MPMediaItemPropertyArtist] = artist
+        }
+        // Third line: without it the station name disappears as soon as a song takes over
+        // the first two — but when the title already *is* the station, repeating it is noise.
+        if hasSong, !station.isEmpty {
+            info[MPMediaItemPropertyAlbumTitle] = station
+        }
         info[MPNowPlayingInfoPropertyIsLiveStream] = true
         info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
         if let artwork = nowPlayingArtwork {
