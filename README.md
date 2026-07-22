@@ -4,14 +4,18 @@ App de iOS para escuchar radio por internet con reconocimiento de canciones (Sha
 
 ## Características
 
-- 🎵 **Reproducción de radio por streaming** sobre `AVPlayer`, con audio en segundo plano (`UIBackgroundModes: audio`) y controles en la pantalla de bloqueo (Now Playing + artwork).
+- 🎵 **Reproducción de radio por streaming** sobre `AVPlayer`, con audio en segundo plano (`UIBackgroundModes: audio`) y controles en la pantalla de bloqueo (Now Playing + carátula).
 - 🔎 **Búsqueda de emisoras** mediante la API pública de [Radio Browser](https://www.radio-browser.info/).
 - ➕ **Emisoras propias**: añadir, editar y eliminar estaciones con URL de stream y logo.
-- 🎼 **Reconocimiento de canciones** con [ShazamKit](https://developer.apple.com/shazamkit/), capturando el audio del stream en directo (`AudioStreamTap`).
-- 🕑 **Historial** de canciones escuchadas, con favoritos.
+- 🎼 **Reconocimiento de canciones** con [ShazamKit](https://developer.apple.com/shazamkit/), capturando el audio del stream en directo (`AudioStreamTap`) o descodificándolo por separado (`StreamDecoder`) en las emisoras que no admiten la captura pasiva.
+- 🖼️ **Carátulas**: portada del tema en la pantalla de reproducción y en el historial, vía ShazamKit o búsqueda en la API de iTunes para las emisoras que sólo emiten texto.
+- 📝 **Letras**: enlace directo a la canción en Apple Music.
+- 🔄 **Resistencia a cortes de red**: reconexión automática de streams caídos (pensada para 5G en movimiento) y un proxy local (`LocalStreamProxy`) que rescata emisoras cuyo servidor describe mal el stream.
+- 🕑 **Historial** de canciones escuchadas, con favoritos y una lista de títulos ignorados que mantiene fuera los eslóganes de la emisora.
 - 📱 **Widgets** (WidgetKit): emisora en reproducción y acceso rápido a emisoras.
-- 🚗 **CarPlay** mediante `CarPlaySceneDelegate`.
+- 🚗 **CarPlay** mediante `CarPlaySceneDelegate`, con panel en el salpicadero (`CarPlayDashboardSceneDelegate`).
 - 🗣️ **Atajos de Siri** (`SiriIntents`).
+- 🌗 **Modo claro y oscuro** con colores adaptativos.
 - 🌍 **Localización en 5 idiomas**: español, inglés, alemán, francés y portugués.
 
 ## Requisitos
@@ -27,13 +31,17 @@ RadioApp/
 ├── RadioApp/                  # Target principal (app iOS)
 │   ├── RadioAppApp.swift      # Punto de entrada + deep links (radioapp://play?u=…)
 │   ├── ContentView.swift      # Navegación principal
-│   ├── RadioPlayer.swift      # Motor de reproducción (AVPlayer + Now Playing)
+│   ├── RadioPlayer.swift      # Motor de reproducción (AVPlayer + Now Playing + reconexión)
+│   ├── LocalStreamProxy.swift # Proxy en loopback para streams mal descritos por el servidor
 │   ├── AudioStreamTap.swift   # Captura de audio del stream para Shazam
+│   ├── StreamDecoder.swift    # Descodificación propia para emisoras sin captura pasiva
 │   ├── ShazamService.swift    # Reconocimiento de canciones (ShazamKit)
 │   ├── RadioBrowserService.swift  # Cliente de la API Radio Browser
 │   ├── Station.swift / StationsStore.swift  # Modelo y persistencia de emisoras
 │   ├── HistoryStore.swift / ListenedSong.swift  # Historial de canciones
-│   ├── CarPlay*.swift         # Integración CarPlay
+│   ├── Lyrics.swift           # Acceso a la letra (enlace a Apple Music)
+│   ├── Theme.swift            # Colores adaptativos (claro / oscuro)
+│   ├── CarPlay*.swift         # Integración CarPlay (lista + salpicadero)
 │   ├── SiriIntents.swift      # Atajos de Siri
 │   ├── *View.swift            # Vistas SwiftUI
 │   └── Localization/          # de, en, es, fr, pt
@@ -60,6 +68,15 @@ radioapp://play?u=<URL_del_stream>
 ```
 
 `RadioAppApp.handleURL` busca la emisora con ese stream y comienza la reproducción.
+
+## Diagnóstico de reproducción
+
+Cuando una emisora no arranca o se corta, el síntoma visible es siempre el mismo (el botón alterna entre play y pausa sin sonido), así que la reproducción emite trazas con `os.Logger` bajo el subsistema `com.radioapp.playback`:
+
+- En dispositivo: **Console.app**, filtrando por ese subsistema.
+- En simulador: `xcrun simctl spawn <udid> log stream --level debug --predicate 'subsystem == "com.radioapp.playback"'`.
+
+Las trazas distinguen las dos causas que producen ese mismo síntoma: una conexión que nunca llega a sonar (el vigilante la reconstruye tras `connectGrace`) y una que sonaba y se cortó (`stallGrace`).
 
 ## Privacidad
 
