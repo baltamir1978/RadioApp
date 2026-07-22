@@ -1,44 +1,42 @@
 # Revisión de código — RadioApp
 
-Revisión general del estado del proyecto y recomendaciones antes de publicar en GitHub / TestFlight.
+Estado del proyecto y trabajo pendiente. Actualizado el 22/07/2026, tras etiquetar **v1.0**.
 
 ## Resumen
 
-App SwiftUI bien estructurada por responsabilidades (player, stores, servicios, vistas). El reconocimiento de canciones y la pantalla de bloqueo se consolidaron en commits recientes. Hay **cambios sin commitear** en el árbol de trabajo que conviene revisar y consolidar.
+App SwiftUI bien estructurada por responsabilidades (player, stores, servicios, vistas). La reproducción, el reconocimiento de canciones y la pantalla de bloqueo están consolidados y publicados en la release v1.0.
 
 ## Estado de Git
 
-- Rama: `main` → `origin` (`github.com/baltamir1978/RadioApp.git`).
-- ⚠️ Hay múltiples archivos modificados sin commitear (`project.pbxproj`, `ContentView.swift`, `HistoryStore.swift`, `CarPlayBridge.swift`, iconos…). Recomendación: revisar el diff, agrupar en commits con mensaje claro y subir antes de etiquetar una versión.
+- Rama `main` → `origin` (`github.com/baltamir1978/RadioApp.git`), al día con el árbol de trabajo.
+- Primera versión etiquetada: **`v1.0`**, con release publicada en GitHub.
+- `MARKETING_VERSION` = `1.0` y `CURRENT_PROJECT_VERSION` = `1`. Este último hay que incrementarlo en cada envío a TestFlight, aunque la versión de cara al usuario no cambie.
+
+## Resuelto desde la revisión anterior
+
+- ✅ **Errores de stream visibles y recuperables**: reconexión automática con reintentos escalonados, vigilante de conexión caída y aviso en pantalla; `LocalStreamProxy` rescata las emisoras cuyo servidor describe mal el stream.
+- ✅ **Trazabilidad**: la reproducción emite trazas con `os.Logger` bajo `com.radioapp.playback`, que es lo único que distingue las causas de un fallo de stream (todas se ven igual desde la interfaz). No son *logs* de depuración sueltos: están puestos a propósito y documentados en el README.
+- ✅ **App Group** en uso para compartir el estado de reproducción con el widget (`Shared/WidgetShared.swift`).
+- ✅ **`.gitignore`** presente; no hay `xcuserdata/` ni `*.xcuserstate` versionados.
+- ✅ **Capabilities documentadas** en el README (Background Modes, App Groups, SiriKit).
 
 ## Puntos fuertes
 
-- ✅ Separación limpia de capas: `RadioPlayer`, `StationsStore`, `HistoryStore`, servicios (`RadioBrowserService`, `ShazamService`).
-- ✅ Reproducción en segundo plano + Now Playing correctamente declarados en `Info.plist`.
-- ✅ Localización completa en 5 idiomas.
-- ✅ Código compartido app↔widget aislado en `Shared/`.
+- Separación limpia de capas: `RadioPlayer`, `StationsStore`, `HistoryStore`, servicios (`RadioBrowserService`, `ShazamService`).
+- Reproducción en segundo plano + Now Playing correctamente declarados en `Info.plist`.
+- Localización completa en 5 idiomas.
+- Código compartido app↔widget aislado en `Shared/`.
 
-## Recomendaciones
+## Pendiente
 
 ### Seguridad / configuración
-- `NSAllowsArbitraryLoads = true` permite tráfico HTTP sin cifrar. Es habitual en apps de radio (muchos streams son HTTP), pero documenta el motivo y, si es posible, restríngelo por dominio con `NSExceptionDomains` para pasar mejor la revisión de App Store.
-
-### Calidad
-- Verifica que no queden *logs* de diagnóstico (el commit `2b875b9` ya retiró los de Shazam — confirmar que no se reintrodujeron en los cambios pendientes).
-- Añade manejo de errores visible al usuario cuando un stream falla o caduca (reintentos / mensaje).
-- Considera mover la persistencia de emisoras/historial a un contenedor de **App Group** si el widget necesita leer el estado actual.
-
-### Mantenimiento
-- Añadir un `.gitignore` que excluya `xcuserdata/`, `*.xcuserstate` y `DerivedData/` (revisar que no se estén versionando archivos de usuario de Xcode).
-- Documentar en el README los *capabilities* exactos que hay que activar (App Groups, SiriKit) para que otro desarrollador pueda compilar a la primera.
+- `NSAllowsArbitraryLoads = true` permite tráfico HTTP sin cifrar. Es habitual en apps de radio (muchos streams siguen siendo HTTP), pero conviene restringirlo por dominio con `NSExceptionDomains` para pasar mejor la revisión de App Store, o al menos dejar por escrito el motivo en la ficha de revisión.
 
 ### Pruebas
-- No se observan tests. Para la lógica pura (parseo de Radio Browser, `Station.initials`, parseo de deep links) unos *unit tests* serían baratos y útiles.
+- **No hay tests.** Para la lógica pura serían baratos y útiles: parseo de la respuesta de Radio Browser, `Station.initials`, el parseo de deep links, `IgnoredTitle.key(station:title:)` y la reescritura de cabeceras de `LocalStreamProxy`.
 
-## Checklist previo a release
-
-- [ ] Consolidar cambios pendientes en commits.
-- [ ] Probar en dispositivo real: Shazam, CarPlay, widget, deep link `radioapp://`.
-- [ ] Revisar textos localizados en los 5 idiomas.
-- [ ] Verificar icono 1024px y assets de App Store.
-- [ ] Confirmar `ITSAppUsesNonExemptEncryption` y cuestionario de cifrado.
+### Verificación en dispositivo
+Lo que el simulador no cubre y sólo se puede comprobar en el coche o en el iPhone:
+- Kiss FM arrancando con 5G (su fallo dependía de la latencia de la red móvil).
+- Que la pantalla de bloqueo y CarPlay ya no repiten el nombre de la emisora entre canciones.
+- Reconocimiento con Shazam en CarPlay, widget y deep link `radioapp://`.
