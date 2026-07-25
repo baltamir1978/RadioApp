@@ -594,13 +594,23 @@ class RadioPlayer: NSObject, ObservableObject {
             // number nor clobber a title ShazamKit already found.
             guard Self.isMeaningfulTitle(cleaned) else { continue }
             let parts = cleaned.split(separator: "-", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
+            let track: String
+            let artist: String?
             if parts.count == 2 {
-                currentArtist = parts[0]
-                currentTrack = parts[1]
+                artist = parts[0]
+                track = parts[1]
             } else {
-                currentTrack = cleaned
-                currentArtist = nil
+                track = cleaned
+                artist = nil
             }
+            // A station announcing itself is not a song — don't let it reach the screen.
+            guard !Self.announcesStation(track: track, artist: artist,
+                                         station: currentStation?.name ?? "") else {
+                clearStreamMetadata()
+                return
+            }
+            currentArtist = artist
+            currentTrack = track
             trackIsFromShazam = false
             currentAppleMusicURL = nil
             updateNowPlayingInfo()
@@ -616,6 +626,39 @@ class RadioPlayer: NSObject, ObservableObject {
     private static func isMeaningfulTitle(_ s: String) -> Bool {
         guard !s.isEmpty else { return false }
         return s.unicodeScalars.contains { CharacterSet.letters.contains($0) }
+    }
+
+    /// Whether a StreamTitle is the station identifying itself rather than naming a song.
+    /// Stations broadcast their own name or a slogan when nothing is on air — Cadena 100
+    /// sends "La Mejor Variedad Musical - CADENA 100" permanently and never publishes the
+    /// actual track. Split on the dash that reads exactly like artist + title, so it reached
+    /// the screen as a song, put a bogus track on the lock screen, and made CarPlay offer the
+    /// heart button instead of Shazam. Either side matching the station's name gives it away.
+    private static func announcesStation(track: String, artist: String?, station: String) -> Bool {
+        let stationKey = compact(station)
+        guard !stationKey.isEmpty else { return false }
+        return [track, artist].compactMap { $0 }.contains { compact($0) == stationKey }
+    }
+
+    /// Case-, accent- and separator-insensitive form, so "CADENA 100" matches "Cadena 100".
+    private static func compact(_ s: String) -> String {
+        s.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+         .components(separatedBy: CharacterSet.alphanumerics.inverted)
+         .joined()
+    }
+
+    /// Drops a title that came from stream metadata, returning the screen (and CarPlay's
+    /// button) to the station. A Shazam result outranks stream metadata, so it survives.
+    private func clearStreamMetadata() {
+        guard !trackIsFromShazam, currentTrack != nil else { return }
+        currentTrack = nil
+        currentArtist = nil
+        currentArtworkURL = nil
+        currentAppleMusicURL = nil
+        lastArtworkKey = nil
+        artworkResolveToken += 1
+        updateNowPlayingInfo()
+        setLockScreenToStationLogo(seedTrack: currentStation?.name ?? "")
     }
 
     private func setupAudioSession() {
