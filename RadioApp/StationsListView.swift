@@ -100,22 +100,25 @@ struct StationRow: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(station.name)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.callout.weight(.semibold))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
 
                     HStack(spacing: 6) {
                         if let country = station.country {
+                            // White on a 35%-alpha grey landed at 1.5:1 over the mint
+                            // background. Primary text on the same tint reads cleanly in
+                            // both appearances, and matches the search results row.
                             Text(country)
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(.white)
+                                .font(.caption2.weight(.medium))
+                                .foregroundStyle(.primary)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(Color.secondary.opacity(0.35), in: Capsule())
+                                .background(Color.secondary.opacity(0.25), in: Capsule())
                         }
                         if let genre = station.genre {
                             Text(genre)
-                                .font(.system(size: 13))
+                                .font(.footnote)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
                         }
@@ -133,6 +136,10 @@ struct StationRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        // One VoiceOver stop per station: name, then country/genre, then whether it's live.
+        .accessibilityElement(children: .combine)
+        .accessibilityHint(NSLocalizedString("a11y_station_hint", comment: ""))
+        .accessibilityAddTraits(isActive && player.isPlaying ? [.isButton, .startsMediaSession] : .isButton)
         .contextMenu {
             Button { onTap() } label: {
                 Label(NSLocalizedString("play", comment: ""), systemImage: "play.fill")
@@ -151,15 +158,19 @@ struct StationRow: View {
 struct LiveIndicator: View {
     let isPlaying: Bool
     @State private var phase = false
+    /// The bars loop forever, so honour the system setting that asks motion to stop.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var animating: Bool { isPlaying && !reduceMotion }
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 3) {
             ForEach(Array([10, 16, 12, 8].enumerated()), id: \.offset) { i, maxH in
                 RoundedRectangle(cornerRadius: 2)
                     .fill(Color.brand)
-                    .frame(width: 3, height: isPlaying ? (phase ? CGFloat(maxH) : CGFloat(8 + (i * 2))) : 5)
+                    .frame(width: 3, height: barHeight(index: i, maxH: maxH))
                     .animation(
-                        isPlaying
+                        animating
                             ? .easeInOut(duration: 0.35 + Double(i) * 0.08).repeatForever(autoreverses: true)
                             : .easeOut(duration: 0.2),
                         value: phase
@@ -169,5 +180,17 @@ struct LiveIndicator: View {
         .frame(width: 22, height: 20)
         .onAppear { phase = true }
         .onDisappear { phase = false }
+        // Purely visual, but it carries real state — say it rather than hide it.
+        .accessibilityElement()
+        .accessibilityLabel(isPlaying
+                            ? NSLocalizedString("a11y_playing_now", comment: "")
+                            : NSLocalizedString("paused", comment: ""))
+    }
+
+    private func barHeight(index: Int, maxH: Int) -> CGFloat {
+        guard isPlaying else { return 5 }
+        // With motion reduced the bars hold a static staggered shape instead of pulsing.
+        guard animating else { return CGFloat(8 + (index * 2)) }
+        return phase ? CGFloat(maxH) : CGFloat(8 + (index * 2))
     }
 }

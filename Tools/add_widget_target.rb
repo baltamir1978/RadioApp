@@ -32,7 +32,7 @@ end
 # 4. the widget target itself
 project.targets.select { |t| t.name == 'RadioWidget' }.each(&:remove_from_project)
 # 5. groups + leftover product reference
-['RadioWidget', 'Shared'].each do |name|
+['RadioWidget', 'Shared', 'WidgetResources'].each do |name|
   grp = project.main_group.children.find { |c| c.respond_to?(:display_name) && c.display_name == name }
   grp.remove_from_project if grp
 end
@@ -62,8 +62,9 @@ widget.build_configurations.each do |config|
   bs['TARGETED_DEVICE_FAMILY'] = '1,2'
   bs['SKIP_INSTALL'] = 'YES'
   bs['SWIFT_EMIT_LOC_STRINGS'] = 'YES'
-  bs['MARKETING_VERSION'] = '1.0'
-  bs['CURRENT_PROJECT_VERSION'] = '1'
+  # Must match the app target's values — App Store Connect rejects a mismatch.
+  bs['MARKETING_VERSION'] = '1.2'
+  bs['CURRENT_PROJECT_VERSION'] = '2'
   bs['LD_RUNPATH_SEARCH_PATHS'] = ['$(inherited)', '@executable_path/Frameworks', '@executable_path/../../Frameworks']
 end
 
@@ -78,6 +79,24 @@ shared_group = project.main_group.new_group('Shared', 'Shared')
 shared_ref = shared_group.new_reference('WidgetShared.swift')
 widget.add_file_references([shared_ref])
 app_target.add_file_references([shared_ref])
+
+# --- localized strings ---------------------------------------------------------
+# An extension has its own bundle, so it cannot read the app's Localizable.strings.
+# Reference the very same files (no copies to keep in sync) as a variant group and
+# copy them into the widget's own bundle. Without this every widget string — and the
+# titles on the widget's own edit screen — falls back to the Spanish `value:` default.
+LANGS = %w[en es fr de pt].freeze
+res_group = project.main_group.new_group('WidgetResources')
+variant = res_group.new_variant_group('Localizable.strings')
+LANGS.each do |lang|
+  ref = variant.new_reference("RadioApp/Localization/#{lang}.lproj/Localizable.strings")
+  ref.name = lang
+end
+widget.add_resources([variant])
+
+# Privacy manifest — Apple evaluates each bundle on its own, so the extension needs its
+# own copy in its own bundle (the app's does not cover it).
+widget.add_resources([widget_group.new_reference('PrivacyInfo.xcprivacy')])
 
 # --- embed the extension in the app ------------------------------------------
 app_target.add_dependency(widget)

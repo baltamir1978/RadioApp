@@ -11,25 +11,21 @@ struct StationSearchView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
 
-    private let countries: [(String, String)] = [
-        ("", "Todos"),
-        ("ES", "España 🇪🇸"),
-        ("GB", "Reino Unido 🇬🇧"),
-        ("US", "Estados Unidos 🇺🇸"),
-        ("FR", "Francia 🇫🇷"),
-        ("DE", "Alemania 🇩🇪"),
-        ("IT", "Italia 🇮🇹"),
-        ("PT", "Portugal 🇵🇹"),
-        ("MX", "México 🇲🇽"),
-        ("AR", "Argentina 🇦🇷"),
-    ]
+    /// Country names come from the system so they follow the reader's language;
+    /// only the codes live here. Sorted by the localized name, "All" first.
+    private var countries: [CountryOption] {
+        let codes = ["ES", "GB", "US", "FR", "DE", "IT", "PT", "MX", "AR"]
+        return [CountryOption(code: "")] + codes
+            .map(CountryOption.init)
+            .sorted { $0.label.localizedStandardCompare($1.label) == .orderedAscending }
+    }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                Picker("País", selection: $selectedCountry) {
-                    ForEach(countries, id: \.0) { code, name in
-                        Text(name).tag(code)
+                Picker(NSLocalizedString("search_country", comment: ""), selection: $selectedCountry) {
+                    ForEach(countries) { country in
+                        Text(country.label).tag(country.code)
                     }
                 }
                 .pickerStyle(.menu)
@@ -94,6 +90,26 @@ struct StationSearchView: View {
     }
 }
 
+/// A country filter entry: the ISO code plus a name in the reader's language.
+struct CountryOption: Identifiable {
+    let code: String
+    var id: String { code }
+
+    var label: String {
+        guard !code.isEmpty else { return NSLocalizedString("search_country_all", comment: "") }
+        let name = Locale.current.localizedString(forRegionCode: code) ?? code
+        return "\(name) \(flag)"
+    }
+
+    /// Regional indicator symbols: 'E','S' → 🇪🇸
+    private var flag: String {
+        code.unicodeScalars
+            .compactMap { UnicodeScalar(127397 + $0.value) }
+            .map(String.init)
+            .joined()
+    }
+}
+
 struct SearchResultRow: View {
     @EnvironmentObject var store: StationsStore
     @EnvironmentObject var player: RadioPlayer
@@ -105,6 +121,7 @@ struct SearchResultRow: View {
     var body: some View {
         HStack(spacing: 12) {
             StationLogo(station: station, size: 46)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(station.name)
@@ -125,6 +142,8 @@ struct SearchResultRow: View {
                     }
                 }
             }
+            // The name, country and genre read as one phrase instead of three stops.
+            .accessibilityElement(children: .combine)
 
             Spacer()
 
@@ -136,6 +155,7 @@ struct SearchResultRow: View {
                     .foregroundStyle(Color.accentColor)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(String(format: NSLocalizedString("a11y_play_station", comment: ""), station.name))
 
             Button {
                 store.add(station)
@@ -146,6 +166,9 @@ struct SearchResultRow: View {
             }
             .buttonStyle(.plain)
             .disabled(isAdded)
+            .accessibilityLabel(isAdded
+                                ? NSLocalizedString("a11y_station_added", comment: "")
+                                : String(format: NSLocalizedString("a11y_add_station", comment: ""), station.name))
         }
         .padding(.vertical, 2)
     }

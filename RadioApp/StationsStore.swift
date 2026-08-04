@@ -57,12 +57,13 @@ class StationsStore: ObservableObject {
     }
 
     /// Shares the station list with the widget extension via the App Group.
+    /// The whole list travels across: the widget's configuration screen offers it as the
+    /// pool the user picks each slot from, so trimming it here would hide stations.
     private func publishToWidget() {
-        let mapped = stations.prefix(8).map {
+        WidgetShared.saveStations(stations.map {
             WidgetStation(name: $0.name, streamURL: $0.streamURL,
                           logoURL: $0.logoURL, initials: $0.initials)
-        }
-        WidgetShared.saveStations(Array(mapped))
+        })
     }
 
     private func load() {
@@ -101,6 +102,10 @@ extension Station {
         Station(name: "SER Oriente",
                 streamURL: "https://playerservices.streamtheworld.com/api/livestream-redirect/SER_ASO_ORIENTE.mp3",
                 logoURL: "https://cadenaser00.epimg.net/favicon.png",
+                country: "ES", genre: "Talk"),
+        Station(name: "COPE Madrid",
+                streamURL: "https://flucast09-h-cloud.flumotion.com/cope/madrid.mp3",
+                logoURL: "https://www.cope.es/estaticos/apple-touch-icon-192x192.png",
                 country: "ES", genre: "Talk"),
     ]
 }

@@ -74,7 +74,9 @@ struct NowPlayingWidgetView: View {
                             HStack(spacing: 4) {
                                 Image(systemName: snap.isPlaying ? "dot.radiowaves.left.and.right" : "pause.fill")
                                     .font(.caption2)
-                                Text(snap.isPlaying ? NSLocalizedString("live", value: "En directo", comment: "") : "Pausa")
+                                Text(snap.isPlaying
+                                     ? NSLocalizedString("live", value: "En directo", comment: "")
+                                     : NSLocalizedString("paused", value: "En pausa", comment: ""))
                                     .font(.caption)
                             }
                             .foregroundStyle(Color.wBrand)
@@ -128,7 +130,7 @@ struct NowPlayingWidgetView: View {
             Image(systemName: "radio")
                 .font(.system(size: 34))
                 .foregroundStyle(Color.wBrand)
-            Text(NSLocalizedString("no_stations", value: "Elige una emisora", comment: ""))
+            Text(NSLocalizedString("widget_choose_station", value: "Elige una emisora", comment: ""))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

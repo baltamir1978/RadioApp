@@ -1,0 +1,7 @@
+/* Siri phrases. The keys are the phrases exactly as written in RadioShortcuts.
+   ${applicationName} is the app name; ${station} is the station parameter.
+   Each localization needs phrasings that are natural to say out loud in that language. */
+"Pon ${station} en ${applicationName}" = "Pon ${station} en ${applicationName}";
+"Pon ${station} en la ${applicationName}" = "Pon ${station} en la ${applicationName}";
+"Reproduce ${station} en ${applicationName}" = "Reproduce ${station} en ${applicationName}";
+"Escucha ${station} en ${applicationName}" = "Escucha ${station} en ${applicationName}";

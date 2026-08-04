@@ -14,6 +14,8 @@
 "searching" = "Recherche...";
 "search_error" = "Erreur de connexion";
 "search_prompt" = "Nom de la station";
+"search_country" = "Pays";
+"search_country_all" = "Tous";
 
 /* Add Station Form */
 "station_info" = "Informations";
@@ -65,6 +67,44 @@
 "mic_denied" = "Accès au micro refusé. Activez-le dans Réglages.";
 "pause" = "Pause";
 "identify_song" = "Identifier le titre";
+
+/* Widgets */
+"widget_stations_title" = "Lancer une station";
+"widget_stations_desc" = "Vos stations en raccourcis : maintenez le widget appuyé pour choisir lesquelles.";
+"widget_now_playing_title" = "En écoute";
+"widget_now_playing_desc" = "Affiche la station et le morceau que vous écoutez. Touchez pour ouvrir l'app.";
+"widget_choose_station" = "Choisissez une station";
+"paused" = "En pause";
+
+/* Siri / widget configuration (App Intents) */
+"intent_station_type" = "Station";
+"intent_play_title" = "Lire une station";
+"intent_play_desc" = "Lit l'une de vos stations dans l'app radio.";
+"intent_playing_dialog" = "Lecture de %@";
+"intent_widget_title" = "Stations du widget";
+"intent_widget_desc" = "Choisissez les stations affichées en raccourcis.";
+"intent_slot_1" = "Emplacement 1";
+"intent_slot_2" = "Emplacement 2";
+"intent_slot_3" = "Emplacement 3";
+"intent_slot_4" = "Emplacement 4";
+
+/* Accessibility (VoiceOver) */
+"a11y_station_hint" = "Touchez deux fois pour écouter cette station";
+"a11y_playing_now" = "En écoute";
+"a11y_stop" = "Arrêter";
+"a11y_open_player" = "Ouvrir le lecteur";
+"a11y_collapse_player" = "Fermer le lecteur";
+"a11y_station_logo" = "Logo de %@";
+"a11y_artwork" = "Pochette de %@";
+"a11y_play_station" = "Écouter %@";
+"a11y_favorite_add" = "Ajouter aux favoris";
+"a11y_favorite_remove" = "Retirer des favoris";
+"a11y_open_apple_music" = "Ouvrir dans Apple Music";
+"a11y_shazam_source" = "Identifié avec Shazam";
+"a11y_add_station" = "Ajouter %@ à mes stations";
+"a11y_station_added" = "Déjà dans mes stations";
+"a11y_buffer_value" = "%d secondes";
+"a11y_buffer_hint" = "Réglez combien de secondes d'audio sont chargées à l'avance";
 
 /* Lyrics */
 "view_lyrics" = "Voir les paroles";

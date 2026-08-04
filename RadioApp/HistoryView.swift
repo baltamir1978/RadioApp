@@ -162,6 +162,8 @@ struct SongHistoryRow: View {
                 }
                 .foregroundStyle(.secondary)
             }
+            // Title, artist and station read as one phrase; the buttons stay separate.
+            .accessibilityElement(children: .combine)
 
             Spacer()
 
@@ -172,6 +174,7 @@ struct SongHistoryRow: View {
                         Image(systemName: "shazam.logo")
                             .font(.callout)
                             .foregroundStyle(accent)
+                            .accessibilityLabel(NSLocalizedString("a11y_shazam_source", comment: ""))
                     } else {
                         // Heart to explicitly keep an auto-captured track.
                         Button {
@@ -182,11 +185,14 @@ struct SongHistoryRow: View {
                                 .foregroundStyle(song.favorite ? AnyShapeStyle(accent) : AnyShapeStyle(.secondary))
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel(NSLocalizedString(
+                            song.favorite ? "a11y_favorite_remove" : "a11y_favorite_add", comment: ""))
                     }
                     if let raw = song.appleMusicURL, let url = URL(string: raw) {
                         Link(destination: url) {
                             Image(systemName: "music.note").font(.caption2).foregroundStyle(.pink)
                         }
+                        .accessibilityLabel(NSLocalizedString("a11y_open_apple_music", comment: ""))
                     }
                     Button {
                         onPlayStation(song.stationName)
@@ -194,6 +200,8 @@ struct SongHistoryRow: View {
                         Image(systemName: "play.circle").font(.callout).foregroundStyle(accent)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(String(format: NSLocalizedString("a11y_play_station", comment: ""),
+                                               song.stationName))
                 }
             }
         }

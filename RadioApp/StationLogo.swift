@@ -25,6 +25,9 @@ struct StationLogo: View {
         }
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: size * 0.22))
+        // Decorative by default: the station name is always right next to it, so reading
+        // the logo too would just repeat. Callers that show it alone re-label it.
+        .accessibilityHidden(true)
     }
 
     private var fallbackView: some View {
@@ -36,18 +39,21 @@ struct StationLogo: View {
         }
     }
 
-    // Deterministic color per station based on name hash
+    // Deterministic color per station based on name hash.
+    // Every entry carries white initials, so each one clears 3:1 against white — the four
+    // brightest of the original palette (orange, teal, amber, sky) sat between 1.9:1 and
+    // 2.8:1 and were darkened to the same hue.
     private var fallbackColor: Color {
         let palette: [Color] = [
-            Color(hex: "#FF6B35"),
+            Color(hex: "#D9541F"),
             Color(hex: "#E8445A"),
             Color(hex: "#7C5CBF"),
             Color(hex: "#2D9CDB"),
-            Color(hex: "#27AE8F"),
+            Color(hex: "#1E8A72"),
             Color(hex: "#219653"),
-            Color(hex: "#F2994A"),
+            Color(hex: "#C97A22"),
             Color(hex: "#EB5757"),
-            Color(hex: "#56CCF2"),
+            Color(hex: "#1B8FBF"),
             Color(hex: "#9B51E0"),
         ]
         let index = abs(station.name.hashValue) % palette.count

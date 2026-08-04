@@ -14,6 +14,8 @@
 "searching" = "Buscando...";
 "search_error" = "Error de conexión";
 "search_prompt" = "Nombre de la emisora";
+"search_country" = "País";
+"search_country_all" = "Todos";
 
 /* Add Station Form */
 "station_info" = "Datos de la emisora";
@@ -69,3 +71,41 @@
 /* Lyrics */
 "view_lyrics" = "Ver letra";
 "lyrics_unavailable" = "Letra no disponible";
+
+/* Widgets */
+"widget_stations_title" = "Lanzar emisora";
+"widget_stations_desc" = "Tus emisoras en accesos directos: mantén pulsado el widget para elegir cuáles.";
+"widget_now_playing_title" = "Sonando ahora";
+"widget_now_playing_desc" = "Muestra la emisora y la canción que estás escuchando. Tócalo para abrir la app.";
+"widget_choose_station" = "Elige una emisora";
+"paused" = "En pausa";
+
+/* Siri / widget configuration (App Intents) */
+"intent_station_type" = "Emisora";
+"intent_play_title" = "Reproducir emisora";
+"intent_play_desc" = "Reproduce una de tus emisoras en la app de radio.";
+"intent_playing_dialog" = "Reproduciendo %@";
+"intent_widget_title" = "Emisoras del widget";
+"intent_widget_desc" = "Elige qué emisoras aparecen en los accesos directos.";
+"intent_slot_1" = "Hueco 1";
+"intent_slot_2" = "Hueco 2";
+"intent_slot_3" = "Hueco 3";
+"intent_slot_4" = "Hueco 4";
+
+/* Accessibility (VoiceOver) */
+"a11y_station_hint" = "Toca dos veces para escuchar esta emisora";
+"a11y_playing_now" = "Sonando ahora";
+"a11y_stop" = "Detener";
+"a11y_open_player" = "Abrir el reproductor";
+"a11y_collapse_player" = "Cerrar el reproductor";
+"a11y_station_logo" = "Logo de %@";
+"a11y_artwork" = "Carátula de %@";
+"a11y_play_station" = "Escuchar %@";
+"a11y_favorite_add" = "Guardar en favoritos";
+"a11y_favorite_remove" = "Quitar de favoritos";
+"a11y_open_apple_music" = "Abrir en Apple Music";
+"a11y_shazam_source" = "Identificada con Shazam";
+"a11y_add_station" = "Añadir %@ a mis emisoras";
+"a11y_station_added" = "Ya está en mis emisoras";
+"a11y_buffer_value" = "%d segundos";
+"a11y_buffer_hint" = "Ajusta cuántos segundos de audio se cargan por adelantado";

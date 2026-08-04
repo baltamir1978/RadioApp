@@ -14,6 +14,8 @@
 "searching" = "Searching...";
 "search_error" = "Connection error";
 "search_prompt" = "Station name";
+"search_country" = "Country";
+"search_country_all" = "All";
 
 /* Add Station Form */
 "station_info" = "Station details";
@@ -65,6 +67,44 @@
 "mic_denied" = "Microphone access denied. Enable it in Settings.";
 "pause" = "Pause";
 "identify_song" = "Identify song";
+
+/* Widgets */
+"widget_stations_title" = "Launch a station";
+"widget_stations_desc" = "Your stations as shortcuts: touch and hold the widget to choose which ones.";
+"widget_now_playing_title" = "Now playing";
+"widget_now_playing_desc" = "Shows the station and song you're listening to. Tap it to open the app.";
+"widget_choose_station" = "Choose a station";
+"paused" = "Paused";
+
+/* Siri / widget configuration (App Intents) */
+"intent_station_type" = "Station";
+"intent_play_title" = "Play station";
+"intent_play_desc" = "Plays one of your stations in the radio app.";
+"intent_playing_dialog" = "Playing %@";
+"intent_widget_title" = "Widget stations";
+"intent_widget_desc" = "Choose which stations appear as shortcuts.";
+"intent_slot_1" = "Slot 1";
+"intent_slot_2" = "Slot 2";
+"intent_slot_3" = "Slot 3";
+"intent_slot_4" = "Slot 4";
+
+/* Accessibility (VoiceOver) */
+"a11y_station_hint" = "Double tap to listen to this station";
+"a11y_playing_now" = "Now playing";
+"a11y_stop" = "Stop";
+"a11y_open_player" = "Open the player";
+"a11y_collapse_player" = "Close the player";
+"a11y_station_logo" = "%@ logo";
+"a11y_artwork" = "Artwork for %@";
+"a11y_play_station" = "Listen to %@";
+"a11y_favorite_add" = "Add to favourites";
+"a11y_favorite_remove" = "Remove from favourites";
+"a11y_open_apple_music" = "Open in Apple Music";
+"a11y_shazam_source" = "Identified with Shazam";
+"a11y_add_station" = "Add %@ to my stations";
+"a11y_station_added" = "Already in my stations";
+"a11y_buffer_value" = "%d seconds";
+"a11y_buffer_hint" = "Adjust how many seconds of audio are loaded ahead";
 
 /* Lyrics */
 "view_lyrics" = "View lyrics";

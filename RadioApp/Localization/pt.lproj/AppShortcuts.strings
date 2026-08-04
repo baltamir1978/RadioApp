@@ -1,0 +1,5 @@
+/* Siri phrases — see es.lproj/AppShortcuts.strings for the key convention. */
+"Pon ${station} en ${applicationName}" = "Toca ${station} na ${applicationName}";
+"Pon ${station} en la ${applicationName}" = "Põe ${station} na ${applicationName}";
+"Reproduce ${station} en ${applicationName}" = "Reproduz ${station} na ${applicationName}";
+"Escucha ${station} en ${applicationName}" = "Ouve ${station} na ${applicationName}";

@@ -4,7 +4,7 @@ import Foundation
 // MARK: - Station entity (what Siri matches against)
 
 nonisolated struct StationEntity: AppEntity {
-    static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Emisora")
+    static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "intent_station_type")
     static let defaultQuery = StationQuery()
 
     /// Stable identifier = the stream URL (the Station UUID is regenerated on cold start).
@@ -43,12 +43,12 @@ nonisolated struct StationQuery: EntityQuery, EntityStringQuery {
 // MARK: - Play intent
 
 struct PlayStationIntent: AppIntent {
-    nonisolated static var title: LocalizedStringResource { "Reproducir emisora" }
-    nonisolated static var description: IntentDescription { IntentDescription("Reproduce una de tus emisoras en la app de radio.") }
+    nonisolated static var title: LocalizedStringResource { "intent_play_title" }
+    nonisolated static var description: IntentDescription { IntentDescription("intent_play_desc") }
     /// Launch the app so audio plays in its process.
     nonisolated static var openAppWhenRun: Bool { true }
 
-    @Parameter(title: "Emisora")
+    @Parameter(title: "intent_station_type")
     var station: StationEntity
 
     @MainActor
@@ -56,7 +56,8 @@ struct PlayStationIntent: AppIntent {
         if let s = StationsStore.shared.stations.first(where: { $0.streamURL == station.id }) {
             RadioPlayer.shared.play(s)
         }
-        return .result(dialog: "Reproduciendo \(station.name)")
+        let spoken = String(format: NSLocalizedString("intent_playing_dialog", comment: ""), station.name)
+        return .result(dialog: IntentDialog(stringLiteral: spoken))
     }
 }
 

@@ -14,6 +14,8 @@
 "searching" = "Suche...";
 "search_error" = "Verbindungsfehler";
 "search_prompt" = "Sendername";
+"search_country" = "Land";
+"search_country_all" = "Alle";
 
 /* Add Station Form */
 "station_info" = "Senderdetails";
@@ -65,6 +67,44 @@
 "mic_denied" = "Mikrofonzugriff verweigert. Aktiviere ihn in den Einstellungen.";
 "pause" = "Pause";
 "identify_song" = "Song erkennen";
+
+/* Widgets */
+"widget_stations_title" = "Sender starten";
+"widget_stations_desc" = "Deine Sender als Kurzbefehle: Halte das Widget gedrückt, um sie auszuwählen.";
+"widget_now_playing_title" = "Läuft gerade";
+"widget_now_playing_desc" = "Zeigt den Sender und den Song, den du hörst. Zum Öffnen der App tippen.";
+"widget_choose_station" = "Sender auswählen";
+"paused" = "Pausiert";
+
+/* Siri / widget configuration (App Intents) */
+"intent_station_type" = "Sender";
+"intent_play_title" = "Sender abspielen";
+"intent_play_desc" = "Spielt einen deiner Sender in der Radio-App ab.";
+"intent_playing_dialog" = "%@ wird abgespielt";
+"intent_widget_title" = "Sender im Widget";
+"intent_widget_desc" = "Wähle, welche Sender als Kurzbefehle erscheinen.";
+"intent_slot_1" = "Platz 1";
+"intent_slot_2" = "Platz 2";
+"intent_slot_3" = "Platz 3";
+"intent_slot_4" = "Platz 4";
+
+/* Accessibility (VoiceOver) */
+"a11y_station_hint" = "Doppeltippen, um diesen Sender zu hören";
+"a11y_playing_now" = "Läuft gerade";
+"a11y_stop" = "Stoppen";
+"a11y_open_player" = "Player öffnen";
+"a11y_collapse_player" = "Player schließen";
+"a11y_station_logo" = "Logo von %@";
+"a11y_artwork" = "Cover von %@";
+"a11y_play_station" = "%@ hören";
+"a11y_favorite_add" = "Zu Favoriten hinzufügen";
+"a11y_favorite_remove" = "Aus Favoriten entfernen";
+"a11y_open_apple_music" = "In Apple Music öffnen";
+"a11y_shazam_source" = "Mit Shazam erkannt";
+"a11y_add_station" = "%@ zu meinen Sendern hinzufügen";
+"a11y_station_added" = "Bereits in meinen Sendern";
+"a11y_buffer_value" = "%d Sekunden";
+"a11y_buffer_hint" = "Stelle ein, wie viele Sekunden Audio im Voraus geladen werden";
 
 /* Lyrics */
 "view_lyrics" = "Liedtext anzeigen";

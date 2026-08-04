@@ -2,6 +2,8 @@
 
 App de iOS para escuchar radio por internet con reconocimiento de canciones (Shazam), widgets, CarPlay y atajos de Siri.
 
+**Versión actual: 1.2**
+
 ## Características
 
 - 🎵 **Reproducción de radio por streaming** sobre `AVPlayer`, con audio en segundo plano (`UIBackgroundModes: audio`) y controles en la pantalla de bloqueo (Now Playing + carátula).
@@ -12,16 +14,17 @@ App de iOS para escuchar radio por internet con reconocimiento de canciones (Sha
 - 📝 **Letras**: enlace directo a la canción en Apple Music.
 - 🔄 **Resistencia a cortes de red**: reconexión automática de streams caídos (pensada para 5G en movimiento) y un proxy local (`LocalStreamProxy`) que rescata emisoras cuyo servidor describe mal el stream.
 - 🕑 **Historial** de canciones escuchadas, con favoritos y una lista de títulos ignorados que mantiene fuera los eslóganes de la emisora.
-- 📱 **Widgets** (WidgetKit): emisora en reproducción y acceso rápido a emisoras.
+- 📱 **Widgets** (WidgetKit): emisora en reproducción y acceso rápido a emisoras. El de accesos directos es **configurable**: mantén pulsado el widget → *Editar* y elige qué emisora va en cada uno de los cuatro huecos.
 - 🚗 **CarPlay** mediante `CarPlaySceneDelegate`, con panel en el salpicadero (`CarPlayDashboardSceneDelegate`).
 - 🗣️ **Atajos de Siri** (`SiriIntents`).
 - 🌗 **Modo claro y oscuro** con colores adaptativos.
-- 🌍 **Localización en 5 idiomas**: español, inglés, alemán, francés y portugués.
+- ♿️ **Accesibilidad**: etiquetas de VoiceOver en toda la interfaz, tipografía que escala con Dynamic Type, contraste verificado contra WCAG AA y respeto por *Reducir movimiento*.
+- 🌍 **Localización en 5 idiomas**: español, inglés, alemán, francés y portugués — incluidos los widgets, las frases de Siri y los avisos de permisos.
 
 ## Requisitos
 
-- Xcode 15 o superior
-- iOS 17.0+
+- Xcode 26 o superior
+- iOS 26.5+
 - Cuenta de desarrollador de Apple (para ShazamKit, CarPlay y widgets en dispositivo real)
 
 ## Estructura del proyecto
@@ -44,11 +47,51 @@ RadioApp/
 │   ├── CarPlay*.swift         # Integración CarPlay (lista + salpicadero)
 │   ├── SiriIntents.swift      # Atajos de Siri
 │   ├── *View.swift            # Vistas SwiftUI
+│   ├── PrivacyInfo.xcprivacy  # Manifiesto de privacidad (App Store)
 │   └── Localization/          # de, en, es, fr, pt
-├── RadioWidget/               # Extensión de widgets (WidgetKit)
+├── RadioWidget/               # Extensión de widgets (WidgetKit) + su propio manifiesto
 ├── Shared/                    # Código compartido app ↔ widget
 └── Tools/                     # Scripts auxiliares (icono, target de widget)
 ```
+
+> El target `RadioWidget` **se genera con `ruby Tools/add_widget_target.rb`**, no editando el
+> proyecto a mano: sus fuentes, recursos y versiones están declarados ahí. Si añades un fichero
+> a `RadioWidget/`, regístralo en el script — al volver a ejecutarlo recrea el target entero.
+
+## Localización
+
+Tres ficheros por idioma bajo `RadioApp/Localization/<idioma>.lproj/`, cada uno con su cometido:
+
+| Fichero | Contenido |
+|---|---|
+| `Localizable.strings` | La interfaz. Todas las claves deben existir en los 5 idiomas. |
+| `AppShortcuts.strings` | Las frases de Siri, y solo eso. Las claves son las frases tal cual están escritas en `RadioShortcuts` (en español), con los marcadores `${applicationName}` y `${station}`. |
+| `InfoPlist.strings` | Los textos de permisos (`NSMicrophoneUsageDescription`). El literal del `Info.plist` es solo el respaldo. |
+
+Dos detalles que no son evidentes:
+
+- **La extensión de widgets tiene su propio bundle** y no puede leer los textos de la app. Los mismos `.lproj` se copian también dentro de `RadioWidget.appex` (lo hace el script del target).
+- **Los App Intents se traducen por clave**: `LocalizedStringResource("intent_play_title")` y
+  `@Parameter(title: "intent_slot_1")` se resuelven contra `Localizable.strings`. No pongas ahí
+  el texto visible o quedará sin traducir.
+
+Comprobar que los idiomas siguen alineados:
+
+```sh
+for l in en es fr de pt; do plutil -lint RadioApp/Localization/$l.lproj/Localizable.strings; done
+```
+
+## Accesibilidad
+
+Criterios que conviene no romper al tocar la interfaz:
+
+- **El acento no admite blanco encima.** `Color.brand` es verde oscuro en claro pero menta claro
+  en oscuro; el blanco sobre esa variante se queda en 1,8:1. Para glifos sobre el acento se usa
+  `Color.appBackground`, que se invierte con él y aguanta por encima de 5:1 en ambos modos.
+- **`WidgetTheme.swift` debe reflejar a `Theme.swift`**, valores oscuros incluidos. Son dos
+  ficheros distintos por fuerza (módulos separados) y se mantienen a mano.
+- **`.system(size:)` no escala** con Dynamic Type. La app usa estilos semánticos (`.callout`,
+  `.footnote`…); los tamaños fijos quedan solo donde el glifo vive en una caja de tamaño fijo.
 
 ## Puesta en marcha
 
@@ -80,8 +123,20 @@ Las trazas distinguen las dos causas que producen ese mismo síntoma: una conexi
 
 ## Privacidad
 
+La app **no recoge datos**: no hay backend propio, ni analítica, ni SDK de terceros (solo
+frameworks de Apple). Las emisoras, el historial y la lista de ignorados se guardan en el
+dispositivo. El tráfico de red se limita al stream y la carátula que pide el usuario, más las
+consultas a Radio Browser e iTunes Search, sin identificador ni cuenta asociada.
+
+- `PrivacyInfo.xcprivacy` (uno por bundle: app y widget — Apple evalúa cada uno por separado).
+  Declara `NSPrivacyTracking = false`, sin dominios de seguimiento, sin datos recogidos, y una
+  única API de motivo requerido: `UserDefaults` con el motivo **CA92.1** (acceso restringido a
+  los datos de la propia app y su *app group*).
 - `NSMicrophoneUsageDescription`: necesario para identificar canciones con Shazam.
 - `ITSAppUsesNonExemptEncryption = false`: la app no usa cifrado no exento.
+
+> Al subir a App Store Connect, el formulario de privacidad tiene que decir lo mismo que el
+> manifiesto. Una incoherencia entre ambos es motivo de rechazo.
 
 ## Licencia
 

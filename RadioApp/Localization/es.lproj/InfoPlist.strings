@@ -1,0 +1,2 @@
+/* Permission prompts shown by the system. */
+"NSMicrophoneUsageDescription" = "Necesario para identificar canciones con Shazam";

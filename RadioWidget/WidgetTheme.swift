@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 extension Color {
     init(hexW: String) {
@@ -11,10 +12,20 @@ extension Color {
         self.init(red: r, green: g, blue: b)
     }
 
-    /// Mint/teal palette mirroring the app theme.
-    static let wBrand = Color(hexW: "#2E9E8F")
-    static let wBackground = Color(hexW: "#EAF7F3")
-    static let wSurface = Color(hexW: "#D6EFE8")
+    /// Resolves to a different value in light vs. dark mode. Mirrors the app's
+    /// `Color(light:dark:)`, duplicated because the extension has its own module.
+    init(lightW: String, darkW: String) {
+        self.init(uiColor: UIColor { traits in
+            UIColor(Color(hexW: traits.userInterfaceStyle == .dark ? darkW : lightW))
+        })
+    }
+
+    /// Mint/teal palette mirroring the app theme — including its dark variants, so a widget
+    /// on a dark home screen doesn't stay a bright mint card. Same AA-checked values as
+    /// `Theme.swift`; keep the two in step.
+    static let wBrand = Color(lightW: "#1F6F64", darkW: "#5FD3C2")
+    static let wBackground = Color(lightW: "#EAF7F3", darkW: "#0E1B19")
+    static let wSurface = Color(lightW: "#D6EFE8", darkW: "#16302C")
 }
 
 /// Builds the `radioapp://play?u=<streamURL>` deep link used by widget buttons.

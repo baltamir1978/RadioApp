@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- The app does no tracking: no third-party SDKs, no analytics, no advertising
+	     identifier, and nothing that links activity to a user across apps or sites. -->
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+
+	<!-- Nothing is collected. The station list, the listening history and the ignore
+	     list are stored on the device (UserDefaults + the app group shared with the
+	     widget) and never sent anywhere. Network traffic is limited to fetching the
+	     streams and artwork the user asked for, plus station lookups on Radio Browser
+	     and metadata lookups on the iTunes Search API; no account, no identifier and
+	     no usage data accompanies those requests. -->
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array/>
+
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<dict>
+			<!-- UserDefaults: the saved stations, playback preferences and the widget's
+			     shared snapshot. Read and written only by this app and its own app
+			     group — reason CA92.1. -->
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>CA92.1</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

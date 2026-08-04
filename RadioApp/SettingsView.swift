@@ -21,12 +21,22 @@ struct SettingsView: View {
                         HStack {
                             Text(NSLocalizedString("settings_buffer", comment: ""))
                             Spacer()
-                            Text("\(Int(player.bufferDuration)) s")
+                            // Formatted rather than "\(n) s" so the unit follows the locale.
+                            Text(Measurement(value: player.bufferDuration, unit: UnitDuration.seconds)
+                                .formatted(.measurement(width: .abbreviated,
+                                                        usage: .asProvided,
+                                                        numberFormatStyle: .number.precision(.fractionLength(0)))))
                                 .foregroundStyle(.secondary)
                                 .monospacedDigit()
+                                .accessibilityHidden(true)
                         }
                         Slider(value: $player.bufferDuration, in: 2...60, step: 1)
                             .tint(accent)
+                            .accessibilityLabel(NSLocalizedString("settings_buffer", comment: ""))
+                            // Without this VoiceOver reads a bare percentage, not seconds.
+                            .accessibilityValue(String(format: NSLocalizedString("a11y_buffer_value", comment: ""),
+                                                       Int(player.bufferDuration)))
+                            .accessibilityHint(NSLocalizedString("a11y_buffer_hint", comment: ""))
                         HStack {
                             Text(NSLocalizedString("settings_buffer_fast", comment: ""))
                                 .font(.caption).foregroundStyle(.secondary)

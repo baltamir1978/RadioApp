@@ -14,6 +14,8 @@
 "searching" = "Buscando...";
 "search_error" = "Erro de conexão";
 "search_prompt" = "Nome da estação";
+"search_country" = "País";
+"search_country_all" = "Todos";
 
 /* Add Station Form */
 "station_info" = "Dados da estação";
@@ -65,6 +67,44 @@
 "mic_denied" = "Acesso ao microfone negado. Ative-o nas Definições.";
 "pause" = "Pausa";
 "identify_song" = "Identificar música";
+
+/* Widgets */
+"widget_stations_title" = "Iniciar estação";
+"widget_stations_desc" = "As suas estações em atalhos: mantenha o widget premido para escolher quais.";
+"widget_now_playing_title" = "A tocar agora";
+"widget_now_playing_desc" = "Mostra a estação e a música que está a ouvir. Toque para abrir a app.";
+"widget_choose_station" = "Escolha uma estação";
+"paused" = "Em pausa";
+
+/* Siri / widget configuration (App Intents) */
+"intent_station_type" = "Estação";
+"intent_play_title" = "Reproduzir estação";
+"intent_play_desc" = "Reproduz uma das suas estações na app de rádio.";
+"intent_playing_dialog" = "A reproduzir %@";
+"intent_widget_title" = "Estações do widget";
+"intent_widget_desc" = "Escolha que estações aparecem nos atalhos.";
+"intent_slot_1" = "Espaço 1";
+"intent_slot_2" = "Espaço 2";
+"intent_slot_3" = "Espaço 3";
+"intent_slot_4" = "Espaço 4";
+
+/* Accessibility (VoiceOver) */
+"a11y_station_hint" = "Toque duas vezes para ouvir esta estação";
+"a11y_playing_now" = "A tocar agora";
+"a11y_stop" = "Parar";
+"a11y_open_player" = "Abrir o reprodutor";
+"a11y_collapse_player" = "Fechar o reprodutor";
+"a11y_station_logo" = "Logótipo de %@";
+"a11y_artwork" = "Capa de %@";
+"a11y_play_station" = "Ouvir %@";
+"a11y_favorite_add" = "Adicionar aos favoritos";
+"a11y_favorite_remove" = "Remover dos favoritos";
+"a11y_open_apple_music" = "Abrir no Apple Music";
+"a11y_shazam_source" = "Identificada com Shazam";
+"a11y_add_station" = "Adicionar %@ às minhas estações";
+"a11y_station_added" = "Já está nas minhas estações";
+"a11y_buffer_value" = "%d segundos";
+"a11y_buffer_hint" = "Ajuste quantos segundos de áudio são carregados antecipadamente";
 
 /* Lyrics */
 "view_lyrics" = "Ver letra";

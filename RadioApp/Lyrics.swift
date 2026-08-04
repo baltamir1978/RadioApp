@@ -46,7 +46,7 @@ struct LyricsAccessory: View {
         if let url = LyricsLink.appleMusicURL(title: title, artist: artist, exact: appleMusicURL) {
             Link(destination: url) {
                 Label(NSLocalizedString("view_lyrics", comment: ""), systemImage: "quote.bubble")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.subheadline.weight(.medium))
             }
             .buttonStyle(.plain)
             .foregroundStyle(Color.brand)
@@ -77,7 +77,7 @@ struct LyricsPanel: View {
             } else if let lyrics, !lyrics.isEmpty {
                 ScrollView {
                     Text(lyrics)
-                        .font(.system(size: 15))
+                        .font(.subheadline)
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity)
                         .padding(.horizontal, 24)
