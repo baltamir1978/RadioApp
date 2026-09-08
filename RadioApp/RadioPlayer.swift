@@ -55,6 +55,12 @@ class RadioPlayer: NSObject, ObservableObject {
     private var metadataOutput: AVPlayerItemMetadataOutput?
     private var interruptionTask: Task<Void, Never>?
     private var wasPlayingBeforeInterruption = false
+    private var routeChangeTask: Task<Void, Never>?
+    /// Whether the last known output route left the phone (car, headphones, AirPlay).
+    private var wasOnExternalRoute = false
+    /// Recovers a player that went to `.paused` on its own while the user still wants audio.
+    private var pauseRecoveryTask: Task<Void, Never>?
+    private var pauseRecoveryGeneration = 0
     private let streamTap = AudioStreamTap()
     /// Receives decoded PCM from the live stream while a tap is active (for ShazamKit).
     let streamSink = StreamSinkBox()
@@ -64,7 +70,12 @@ class RadioPlayer: NSObject, ObservableObject {
     /// "artist|title" of the last resolved cover, so repeated ICY frames for the same song
     /// don't re-hit the network. Bumped independently of `artworkToken` (image-load race).
     private var lastArtworkKey: String?
-    private var artworkResolveToken = 0
+    /// Covers already resolved this session, keyed by "artist|title". A nil value records a
+    /// song iTunes has no cover for, so we don't ask again every time it plays.
+    private var artworkCache: [String: ResolvedArtwork?] = [:]
+    /// Songs whose lookup (including retries) is still running, so repeated ICY frames for the
+    /// same track don't start a second one.
+    private var artworkLookupsInFlight: Set<String> = []
     /// Whether `currentTrack` was filled in by ShazamKit (vs. stream metadata). Lets us
     /// drop a stale Shazam title on re-identify without wiping real station metadata.
     private var trackIsFromShazam = false
@@ -78,6 +89,9 @@ class RadioPlayer: NSObject, ObservableObject {
     /// Per-item NotificationCenter tokens (stall / failed-to-end), removed on teardown.
     private var itemObservers: [NSObjectProtocol] = []
     private var watchdogTask: Task<Void, Never>?
+    /// Identifies the watchdog currently owning `watchdogTask`, so a cancelled one can't clear
+    /// a newer timer out of the slot on its way out.
+    private var watchdogGeneration = 0
     private var reconnectTask: Task<Void, Never>?
     private var reconnectAttempt = 0
     private let pathMonitor = NWPathMonitor()
@@ -124,6 +138,7 @@ class RadioPlayer: NSObject, ObservableObject {
         setupAudioSession()
         setupRemoteControls()
         setupInterruptionHandling()
+        setupRouteChangeHandling()
         setupPathMonitor()
     }
 
@@ -140,6 +155,9 @@ class RadioPlayer: NSObject, ObservableObject {
         isLoading = true
         intendsToPlay = true
         reconnectAttempt = 0
+        // The user chose to play right now, so whatever they're on is the route they meant —
+        // including the phone's own speaker.
+        wasOnExternalRoute = Self.isOutputExternal()
 
         guard startStream() else {
             isLoading = false
@@ -284,6 +302,7 @@ class RadioPlayer: NSObject, ObservableObject {
             isPlaying = false
         } else {
             intendsToPlay = true
+            wasOnExternalRoute = Self.isOutputExternal()
             if player == nil {
                 play(station)
             } else {
@@ -336,8 +355,56 @@ class RadioPlayer: NSObject, ObservableObject {
             if intendsToPlay { armWatchdog() }
         case .paused:
             disarmWatchdog()
+            // A pause the user didn't ask for. AVPlayer parks here after an interruption it
+            // never reports as ended, after a route change, or when a live item quietly gives
+            // up — and nothing else in this class was watching for it, so the app sat there
+            // showing "playing" with no sound until the user pressed play twice.
+            if intendsToPlay { scheduleUnexpectedPauseRecovery() }
         @unknown default:
             break
+        }
+    }
+
+    /// Nudges a self-paused player back to life: resume first, rebuild the stream if that
+    /// doesn't take. Deliberately delayed — `replaceCurrentItem` during a standby promotion
+    /// passes through `.paused` for an instant, and that is not a fault.
+    private func scheduleUnexpectedPauseRecovery() {
+        guard pauseRecoveryTask == nil else { return }
+        pauseRecoveryGeneration += 1
+        let generation = pauseRecoveryGeneration
+        pauseRecoveryTask = Task { @MainActor [weak self] in
+            // Spread out rather than one shot: an interruption can outlast any single delay,
+            // and giving up after the first try is what left the app silent until the user
+            // pressed play twice.
+            for wait in [1, 5, 15, 30, 60, 120] as [UInt64] {
+                try? await Task.sleep(nanoseconds: wait * 1_000_000_000)
+                guard let self, !Task.isCancelled, self.intendsToPlay else { break }
+                guard self.player?.timeControlStatus == .paused else { break }
+                // Never resume into the phone's own speaker after the car stereo dropped out.
+                guard !self.fellBackToBuiltInSpeaker() else {
+                    playbackLog.notice("paused with output back on the built-in speaker — staying quiet")
+                    self.intendsToPlay = false
+                    self.isPlaying = false
+                    self.updateNowPlayingInfo()
+                    break
+                }
+                // Some interruptions (a call answered on the car's screen) never send `.ended`,
+                // so waiting for the notification means waiting forever. Claiming the session
+                // is the honest test: it only succeeds once nobody else holds the audio.
+                do { try AVAudioSession.sharedInstance().setActive(true) } catch { continue }
+                playbackLog.notice("player paused itself — resuming")
+                self.player?.play()
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                guard !Task.isCancelled, self.intendsToPlay,
+                      self.player?.timeControlStatus != .playing else { break }
+                playbackLog.notice("resume didn't take — rebuilding the stream")
+                self.scheduleReconnect()
+                break
+            }
+            // Same trap as the watchdog: a cancelled task resumes a hop later, so only clear
+            // the slot if it still holds this attempt.
+            guard let self, self.pauseRecoveryGeneration == generation else { return }
+            self.pauseRecoveryTask = nil
         }
     }
 
@@ -347,10 +414,15 @@ class RadioPlayer: NSObject, ObservableObject {
         guard intendsToPlay, watchdogTask == nil else { return }
         // A connection that has never played is still buffering, not stalled — give it room.
         let grace = hasPlayedSinceConnect ? stallGrace : connectGrace
+        watchdogGeneration += 1
+        let generation = watchdogGeneration
         watchdogTask = Task { @MainActor [weak self] in
             guard let self else { return }
             try? await Task.sleep(nanoseconds: UInt64(grace * 1_000_000_000))
-            self.watchdogTask = nil
+            // Only clear the slot if it still holds *this* timer: a cancelled task resumes one
+            // hop later, and blindly nil-ing the slot there orphaned a watchdog that had been
+            // armed in between — it stayed alive, uncancellable, and fired a spurious rebuild.
+            if self.watchdogGeneration == generation { self.watchdogTask = nil }
             guard !Task.isCancelled, self.intendsToPlay else { return }
             if self.player?.timeControlStatus != .playing {
                 playbackLog.notice("watchdog fired after \(grace, privacy: .public)s (hasPlayed=\(self.hasPlayedSinceConnect, privacy: .public)) → reconnect")
@@ -383,6 +455,16 @@ class RadioPlayer: NSObject, ObservableObject {
             // No point rebuilding while the network is down; the path monitor will kick us
             // the moment connectivity returns.
             guard self.hasNetwork else { return }
+            // The car stereo going away is not a broken stream; rebuilding here is what used
+            // to move the sound to the phone's speaker mid-drive.
+            guard !self.fellBackToBuiltInSpeaker() else {
+                playbackLog.notice("skipping reconnect — output fell back to the built-in speaker")
+                self.intendsToPlay = false
+                self.isReconnecting = false
+                self.isPlaying = false
+                self.updateNowPlayingInfo()
+                return
+            }
             playbackLog.notice("rebuilding connection (attempt \(self.reconnectAttempt, privacy: .public))")
             self.teardownStream()
             self.startStream()
@@ -392,6 +474,8 @@ class RadioPlayer: NSObject, ObservableObject {
     private func cancelReconnect() {
         disarmWatchdog()
         cancelPreflight()
+        pauseRecoveryTask?.cancel()
+        pauseRecoveryTask = nil
         reconnectTask?.cancel()
         reconnectTask = nil
         isReconnecting = false
@@ -656,21 +740,76 @@ class RadioPlayer: NSObject, ObservableObject {
         currentArtworkURL = nil
         currentAppleMusicURL = nil
         lastArtworkKey = nil
-        artworkResolveToken += 1
         updateNowPlayingInfo()
         setLockScreenToStationLogo(seedTrack: currentStation?.name ?? "")
     }
 
     private func setupAudioSession() {
         do {
+            // `.allowBluetoothHFP` asks for the hands-free profile: mono, telephone-grade, and
+            // on some car kits the system picks it over A2DP/CarPlay for a playback-only
+            // session, then drops back to the phone speaker when the call-audio link is
+            // released. A pure playback session already reaches A2DP and CarPlay.
             try AVAudioSession.sharedInstance().setCategory(
                 .playback, mode: .default,
-                options: [.allowAirPlay, .allowBluetoothHFP]
+                options: [.allowAirPlay, .allowBluetoothA2DP]
             )
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {
             print("Audio session error: \(error)")
         }
+        wasOnExternalRoute = Self.isOutputExternal()
+    }
+
+    // MARK: - Output route
+
+    /// Whether audio is currently leaving the phone for a car, headphones or AirPlay, rather
+    /// than the built-in speaker.
+    private nonisolated static func isOutputExternal() -> Bool {
+        AVAudioSession.sharedInstance().currentRoute.outputs.contains { output in
+            output.portType != .builtInSpeaker && output.portType != .builtInReceiver
+        }
+    }
+
+    /// Follows route changes so a car stereo dropping out never turns into the radio blaring
+    /// from the phone's own speaker.
+    ///
+    /// When Bluetooth or CarPlay goes away iOS moves the route to the built-in speaker and
+    /// pauses the player. Our reconnect logic used to read that pause as a dead stream, rebuild
+    /// it and call `play()` again — which is exactly how a quiet drive turned into the phone
+    /// suddenly playing out loud. Losing the output device is a reason to stop, not to retry,
+    /// so we clear the intent to play along with any pending reconnect.
+    private func setupRouteChangeHandling() {
+        routeChangeTask = Task { @MainActor [weak self] in
+            for await notification in NotificationCenter.default.notifications(named: AVAudioSession.routeChangeNotification) {
+                guard let self else { return }
+                let raw = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt
+                let reason = raw.flatMap { AVAudioSession.RouteChangeReason(rawValue: $0) } ?? .unknown
+                self.handleRouteChange(reason)
+            }
+        }
+    }
+
+    private func handleRouteChange(_ reason: AVAudioSession.RouteChangeReason) {
+        // Only ever set on the way *out*: forgetting we had been on the car stereo the moment
+        // iOS drops us onto the speaker would defeat `fellBackToBuiltInSpeaker`. Starting
+        // playback deliberately is what clears it (see `play`).
+        if Self.isOutputExternal() { wasOnExternalRoute = true }
+        guard reason == .oldDeviceUnavailable else { return }
+        playbackLog.notice("output device went away — pausing instead of falling back to the speaker")
+        guard intendsToPlay else { return }
+        intendsToPlay = false
+        cancelReconnect()
+        player?.pause()
+        isPlaying = false
+        updateNowPlayingInfo()
+    }
+
+    /// True when playback would now come out of the phone's own speaker after having been on a
+    /// car stereo / headphones. Nothing automatic — a watchdog, a reconnect, a resumed
+    /// interruption — may start audio in that state.
+    private func fellBackToBuiltInSpeaker() -> Bool {
+        wasOnExternalRoute && !Self.isOutputExternal()
     }
 
     private func setupInterruptionHandling() {
@@ -681,11 +820,23 @@ class RadioPlayer: NSObject, ObservableObject {
                       let type = AVAudioSession.InterruptionType(rawValue: typeValue) else { continue }
                 switch type {
                 case .began:
-                    wasPlayingBeforeInterruption = isPlaying
+                    wasPlayingBeforeInterruption = isPlaying || intendsToPlay
                     isPlaying = false
+                    updateNowPlayingInfo()
                 case .ended:
                     guard wasPlayingBeforeInterruption, player != nil else { continue }
+                    // Only resume when the system says the interruption is over *and* wants us
+                    // back. Some interruptions (a call the user takes over CarPlay) end without
+                    // `shouldResume`, and forcing playback there steals the audio session back.
+                    let options = (userInfo[AVAudioSessionInterruptionOptionKey] as? UInt)
+                        .map { AVAudioSession.InterruptionOptions(rawValue: $0) } ?? []
+                    guard options.contains(.shouldResume), !fellBackToBuiltInSpeaker() else {
+                        intendsToPlay = false
+                        updateNowPlayingInfo()
+                        continue
+                    }
                     try? AVAudioSession.sharedInstance().setActive(true)
+                    intendsToPlay = true
                     player?.play()
                     isPlaying = true
                     updateNowPlayingInfo()
@@ -786,8 +937,6 @@ class RadioPlayer: NSObject, ObservableObject {
         // key; metadata lookups dedup to avoid hammering the network on repeated ICY frames.
         if shazamURL == nil, key == lastArtworkKey { return }
         lastArtworkKey = key
-        artworkResolveToken += 1
-        let token = artworkResolveToken
 
         if let shazamURL {
             applyCover(shazamURL, seedTrack: track)
@@ -798,14 +947,69 @@ class RadioPlayer: NSObject, ObservableObject {
         // station logo, then resolve the new cover by artist + title.
         currentArtworkURL = nil
         setLockScreenToStationLogo(seedTrack: track)
-        Task.detached(priority: .utility) { [weak self] in
-            let found = await Self.lookupCoverArt(track: track, artist: artist)
-            await MainActor.run {
-                guard let self, token == self.artworkResolveToken, let found else { return }
-                self.applyCover(found.artwork, seedTrack: track)
-                self.currentAppleMusicURL = found.appleMusic
-            }
+
+        // Already looked this song up — reuse it. The cache is what keeps the cover on screen
+        // across a reconnect, which re-delivers the same ICY title on a brand-new metadata
+        // output, and across the station's own ident frames coming and going between songs.
+        if let cached = artworkCache[key] {
+            if let cached { applyResolved(cached, seedTrack: track) }
+            return
         }
+        guard !artworkLookupsInFlight.contains(key) else { return }
+        artworkLookupsInFlight.insert(key)
+        startArtworkLookup(key: key, track: track, artist: artist)
+    }
+
+    /// Resolves a cover through the iTunes Search API, retrying a few times when the *network*
+    /// fails rather than when the song is genuinely unknown.
+    ///
+    /// A single lost request used to cost the whole song its artwork: the key was marked as
+    /// looked-up before the answer came back, so every later ICY frame for the same track was
+    /// deduped away and the hero kept showing the station logo until the song changed. On a
+    /// mobile connection in a car that miss is routine, not rare.
+    private func startArtworkLookup(key: String, track: String, artist: String?) {
+        Task { @MainActor [weak self] in
+            let backoff: [UInt64] = [2, 5, 12]
+            for attempt in 0...backoff.count {
+                let outcome = await Self.lookupCoverArt(track: track, artist: artist)
+                guard let self else { return }
+                switch outcome {
+                case .found(let artwork, let appleMusic):
+                    let resolved = ResolvedArtwork(artwork: artwork, appleMusic: appleMusic)
+                    self.rememberArtwork(resolved, for: key)
+                    self.artworkLookupsInFlight.remove(key)
+                    // Only paint it if this is still the song on air; the cache keeps it for
+                    // when the same track comes round again.
+                    if key == self.lastArtworkKey { self.applyResolved(resolved, seedTrack: track) }
+                    return
+                case .notFound:
+                    playbackLog.notice("no cover found for \(track, privacy: .public)")
+                    self.rememberArtwork(nil, for: key)
+                    self.artworkLookupsInFlight.remove(key)
+                    return
+                case .failed:
+                    guard attempt < backoff.count, key == self.lastArtworkKey else {
+                        self.artworkLookupsInFlight.remove(key)
+                        return
+                    }
+                    playbackLog.notice("cover lookup failed for \(track, privacy: .public) — retrying")
+                    try? await Task.sleep(nanoseconds: backoff[attempt] * 1_000_000_000)
+                }
+            }
+            self?.artworkLookupsInFlight.remove(key)
+        }
+    }
+
+    private func applyResolved(_ resolved: ResolvedArtwork, seedTrack: String) {
+        applyCover(resolved.artwork, seedTrack: seedTrack)
+        currentAppleMusicURL = resolved.appleMusic
+    }
+
+    /// Keeps the lookup cache small — a long drive is a lot of songs, and only the recent ones
+    /// can still come back around.
+    private func rememberArtwork(_ resolved: ResolvedArtwork?, for key: String) {
+        if artworkCache.count >= 60 { artworkCache.removeAll() }
+        artworkCache[key] = .some(resolved)
     }
 
     private func applyCover(_ url: URL, seedTrack: String) {
@@ -830,28 +1034,52 @@ class RadioPlayer: NSObject, ObservableObject {
 
     /// Looks up cover art + Apple Music link for a metadata-only title via the iTunes Search
     /// API. Returns nil on any miss so the caller keeps the station logo.
-    private nonisolated static func lookupCoverArt(track: String, artist: String?) async -> (artwork: URL, appleMusic: URL?)? {
+    private nonisolated static func lookupCoverArt(track: String, artist: String?) async -> ArtworkLookup {
         let term = [artist, track].compactMap { $0 }.joined(separator: " ")
-        guard !term.isEmpty, var comps = URLComponents(string: "https://itunes.apple.com/search") else { return nil }
+        guard !term.isEmpty, var comps = URLComponents(string: "https://itunes.apple.com/search") else { return .notFound }
         comps.queryItems = [
             URLQueryItem(name: "term", value: term),
             URLQueryItem(name: "entity", value: "song"),
             URLQueryItem(name: "limit", value: "1")
         ]
-        guard let url = comps.url,
-              let (data, _) = try? await URLSession.shared.data(from: url),
-              let root = try? JSONDecoder().decode(ITunesSearchResponse.self, from: data),
-              let hit = root.results.first,
-              let art = hit.artworkUrl100 else { return nil }
+        guard let url = comps.url else { return .notFound }
+        var request = URLRequest(url: url)
+        // Well short of the default 60s: a cover that arrives a minute late is no use on a
+        // station that has already moved on, and a shorter wait is what makes retrying viable.
+        request.timeoutInterval = 12
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        guard let (data, response) = try? await URLSession.shared.data(for: request) else { return .failed }
+        // iTunes Search throttles bursts with a 403; that is a transient failure, not a miss.
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            playbackLog.error("iTunes search returned \(http.statusCode, privacy: .public)")
+            return .failed
+        }
+        guard let root = try? JSONDecoder().decode(ITunesSearchResponse.self, from: data) else { return .failed }
+        guard let hit = root.results.first, let art = hit.artworkUrl100 else { return .notFound }
         // artworkUrl100 ends in ".../100x100bb.jpg"; ask for 600 for a crisp hero image.
         let big = art.replacingOccurrences(of: "100x100bb", with: "600x600bb")
-        guard let artworkURL = URL(string: big) else { return nil }
-        return (artworkURL, hit.trackViewUrl.flatMap { URL(string: $0) })
+        guard let artworkURL = URL(string: big) else { return .notFound }
+        return .found(artworkURL, hit.trackViewUrl.flatMap { URL(string: $0) })
     }
 
-    private struct ITunesSearchResponse: Decodable {
+    /// Why a cover lookup ended, so the caller can tell "this song has no cover" (final) from
+    /// "the network let us down" (worth retrying).
+    private enum ArtworkLookup {
+        case found(URL, URL?)
+        case notFound
+        case failed
+    }
+
+    private struct ResolvedArtwork {
+        let artwork: URL
+        let appleMusic: URL?
+    }
+
+    // Decoded off the main actor inside `lookupCoverArt`, so the conformance must not inherit
+    // the type-wide @MainActor isolation this project infers.
+    private nonisolated struct ITunesSearchResponse: Decodable {
         let results: [Item]
-        struct Item: Decodable {
+        nonisolated struct Item: Decodable {
             let artworkUrl100: String?
             let trackViewUrl: String?
         }

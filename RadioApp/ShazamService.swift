@@ -241,9 +241,11 @@ class ShazamService: NSObject, ObservableObject, SHSessionDelegate {
 
     private func restoreAudioSession() {
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        // Must match `RadioPlayer.setupAudioSession` — leaving the hands-free profile enabled
+        // here would hand playback back on a mono telephone route.
         try? AVAudioSession.sharedInstance().setCategory(
             .playback, mode: .default,
-            options: [.allowAirPlay, .allowBluetoothHFP]
+            options: [.allowAirPlay, .allowBluetoothA2DP]
         )
         try? AVAudioSession.sharedInstance().setActive(true)
     }

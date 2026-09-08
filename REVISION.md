@@ -1,6 +1,6 @@
 # Revisión de código — RadioApp
 
-Estado del proyecto y trabajo pendiente. Actualizado el 22/07/2026, tras etiquetar **v1.0**.
+Estado del proyecto y trabajo pendiente. Actualizado el 08/09/2026, tras la ronda de arreglos de audio en marcha (v1.2).
 
 ## Resumen
 
@@ -19,6 +19,9 @@ App SwiftUI bien estructurada por responsabilidades (player, stores, servicios, 
 - ✅ **App Group** en uso para compartir el estado de reproducción con el widget (`Shared/WidgetShared.swift`).
 - ✅ **`.gitignore`** presente; no hay `xcuserdata/` ni `*.xcuserstate` versionados.
 - ✅ **Capabilities documentadas** en el README (Background Modes, App Groups, SiriKit).
+- ✅ **Cuelgue silencioso** (08/09/2026): `handleTimeControl(.paused)` solo desarmaba el vigilante, así que un `AVPlayer` que se pausaba solo dejaba `isPlaying == true` sin audio y había que pulsar play dos veces. Ahora `scheduleUnexpectedPauseRecovery()` reintenta de forma escalonada y reconstruye el stream si reanudar no basta.
+- ✅ **Salto al altavoz del móvil** (08/09/2026): al desaparecer el Bluetooth del coche, la reconexión reanudaba sobre la ruta nueva y la radio empezaba a sonar por el teléfono. Se observa `routeChangeNotification`, y `.oldDeviceUnavailable` pausa en vez de reintentar. Retirado además `.allowBluetoothHFP` de la sesión `.playback`.
+- ✅ **Carátulas que no llegaban** (08/09/2026): un solo fallo de red condenaba a la canción entera a quedarse con el logo, porque la clave se marcaba como buscada antes de conocer el resultado. Ahora se distingue "sin carátula" de "falló la red", con reintentos y caché por canción.
 
 ## Puntos fuertes
 
@@ -40,3 +43,7 @@ Lo que el simulador no cubre y sólo se puede comprobar en el coche o en el iPho
 - Kiss FM arrancando con 5G (su fallo dependía de la latencia de la red móvil).
 - Que la pantalla de bloqueo y CarPlay ya no repiten el nombre de la emisora entre canciones.
 - Reconocimiento con Shazam en CarPlay, widget y deep link `radioapp://`.
+- **Los tres arreglos del 08/09/2026**, que por definición sólo se dan en marcha: que la app no
+  se quede muda tras una llamada, que al perder el Bluetooth calle en vez de pasar al altavoz, y
+  que Los 40 muestre la carátula del disco. Las trazas de `com.radioapp.playback` (tabla en el
+  README) dicen por cuál de los caminos ha ido cada caso.

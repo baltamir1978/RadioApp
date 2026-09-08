@@ -10,9 +10,10 @@ App de iOS para escuchar radio por internet con reconocimiento de canciones (Sha
 - 🔎 **Búsqueda de emisoras** mediante la API pública de [Radio Browser](https://www.radio-browser.info/).
 - ➕ **Emisoras propias**: añadir, editar y eliminar estaciones con URL de stream y logo.
 - 🎼 **Reconocimiento de canciones** con [ShazamKit](https://developer.apple.com/shazamkit/), capturando el audio del stream en directo (`AudioStreamTap`) o descodificándolo por separado (`StreamDecoder`) en las emisoras que no admiten la captura pasiva.
-- 🖼️ **Carátulas**: portada del tema en la pantalla de reproducción y en el historial, vía ShazamKit o búsqueda en la API de iTunes para las emisoras que sólo emiten texto.
+- 🖼️ **Carátulas**: portada del tema en la pantalla de reproducción y en el historial, vía ShazamKit o búsqueda en la API de iTunes para las emisoras que sólo emiten texto, con caché por canción y reintentos cuando falla la red.
 - 📝 **Letras**: enlace directo a la canción en Apple Music.
 - 🔄 **Resistencia a cortes de red**: reconexión automática de streams caídos (pensada para 5G en movimiento) y un proxy local (`LocalStreamProxy`) que rescata emisoras cuyo servidor describe mal el stream.
+- 🎧 **Cuidado con la ruta de audio**: si el equipo del coche o los auriculares desaparecen, la app calla en vez de seguir sonando por el altavoz del móvil; y una pausa que el usuario no ha pedido (una llamada, Siri) se recupera sola.
 - 🕑 **Historial** de canciones escuchadas, con favoritos y una lista de títulos ignorados que mantiene fuera los eslóganes de la emisora.
 - 📱 **Widgets** (WidgetKit): emisora en reproducción y acceso rápido a emisoras. El de accesos directos es **configurable**: mantén pulsado el widget → *Editar* y elige qué emisora va en cada uno de los cuatro huecos.
 - 🚗 **CarPlay** mediante `CarPlaySceneDelegate`, con panel en el salpicadero (`CarPlayDashboardSceneDelegate`).
@@ -119,7 +120,36 @@ Cuando una emisora no arranca o se corta, el síntoma visible es siempre el mism
 - En dispositivo: **Console.app**, filtrando por ese subsistema.
 - En simulador: `xcrun simctl spawn <udid> log stream --level debug --predicate 'subsystem == "com.radioapp.playback"'`.
 
-Las trazas distinguen las dos causas que producen ese mismo síntoma: una conexión que nunca llega a sonar (el vigilante la reconstruye tras `connectGrace`) y una que sonaba y se cortó (`stallGrace`).
+Las trazas distinguen las causas que producen ese mismo síntoma:
+
+| Traza | Qué ha pasado |
+|---|---|
+| `watchdog fired after 25.0s (hasPlayed=false)` | La conexión nunca llegó a sonar; se reconstruye tras `connectGrace`. |
+| `watchdog fired after 5.0s (hasPlayed=true)` | Sonaba y se cortó; se reconstruye tras `stallGrace`. |
+| `player paused itself — resuming` | El reproductor se pausó solo (interrupción, ruta) y se está reanudando. |
+| `output device went away` | Se perdió el coche o los auriculares: se pausa a propósito, no se reintenta. |
+| `skipping reconnect — output fell back to the built-in speaker` | Se ha evitado que la radio vuelva a sonar por el altavoz del móvil. |
+| `cover lookup failed … retrying` | La búsqueda de carátula en iTunes falló por red; se reintenta. |
+
+## Audio en el coche
+
+Tres reglas que conviene no romper al tocar `RadioPlayer`, porque las tres nacen de fallos reales
+en marcha y ninguna se reproduce en el simulador:
+
+- **Perder el aparato de salida es motivo para callarse, no para reintentar.** Cuando el
+  Bluetooth o CarPlay desaparecen, iOS mueve la ruta al altavoz y pausa. Si la lógica de
+  reconexión lee esa pausa como un stream muerto y llama a `play()`, la radio empieza a sonar a
+  todo volumen por el móvil. De ahí el observador de `routeChangeNotification` y el guardia
+  `fellBackToBuiltInSpeaker()`, consultado antes de reconectar, de reanudar una pausa y de
+  reanudar una interrupción.
+- **Una pausa que el usuario no ha pedido hay que recuperarla.** `AVPlayer` se queda en
+  `.paused` cuando una interrupción manda `.began` y nunca `.ended` — habitual con las llamadas
+  atendidas desde la pantalla del coche. La prueba fiable de que la interrupción terminó no es
+  la notificación, sino conseguir `setActive(true)` sobre la sesión.
+- **`.playback` no lleva `.allowBluetoothHFP`.** HFP es el perfil de manos libres, mono y de
+  calidad telefónica; declararlo hace que algunos equipos de coche lo prefieran sobre
+  A2DP/CarPlay. La sesión usa `.allowBluetoothA2DP`, y `ShazamService.restoreAudioSession` tiene
+  que declarar exactamente lo mismo o devolverá la reproducción por una ruta mono.
 
 ## Privacidad
 
