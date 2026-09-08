@@ -8,7 +8,10 @@ import os
 /// Playback / reconnection tracing. Visible in Console.app (and `xcrun simctl spawn … log stream`)
 /// under subsystem `com.radioapp.playback` — the only practical way to see why a stream failed to
 /// start while driving, since the symptom (silent play/pause flicker) looks identical whatever the cause.
-private let playbackLog = Logger(subsystem: "com.radioapp.playback", category: "stream")
+/// `nonisolated` because this project infers @MainActor everywhere: without it the logger would
+/// be main-actor-isolated and unusable from the off-main helpers (e.g. `lookupCoverArt`).
+/// `Logger` is Sendable, so sharing it across actors is safe.
+private nonisolated let playbackLog = Logger(subsystem: "com.radioapp.playback", category: "stream")
 
 /// Thread-safe holder bridging the audio render thread (stream tap) to a consumer
 /// such as ShazamKit. The buffer handler is set/cleared on the main actor but
