@@ -16,16 +16,15 @@ private nonisolated let playbackLog = Logger(subsystem: "com.radioapp.playback",
 /// Thread-safe holder bridging the audio render thread (stream tap) to a consumer
 /// such as ShazamKit. The buffer handler is set/cleared on the main actor but
 /// invoked from the real-time audio thread.
-final class StreamSinkBox: @unchecked Sendable {
-    private let lock = NSLock()
-    private var sink: ((AVAudioPCMBuffer) -> Void)?
+nonisolated final class StreamSinkBox: Sendable {
+    private let sink = OSAllocatedUnfairLock<(@Sendable (AVAudioPCMBuffer) -> Void)?>(initialState: nil)
 
-    func set(_ sink: ((AVAudioPCMBuffer) -> Void)?) {
-        lock.lock(); self.sink = sink; lock.unlock()
+    func set(_ sink: (@Sendable (AVAudioPCMBuffer) -> Void)?) {
+        self.sink.withLock { $0 = sink }
     }
 
     func call(_ buffer: AVAudioPCMBuffer) {
-        lock.lock(); let sink = self.sink; lock.unlock()
+        let sink = self.sink.withLock { $0 }
         sink?(buffer)
     }
 }
@@ -215,8 +214,8 @@ class RadioPlayer: NSObject, ObservableObject {
         let item: AVPlayerItem
         var proxy: LocalStreamProxy?
         if url.pathExtension.lowercased() != "m3u8",
-           let live = LocalStreamProxy(originURL: url), let localURL = live.localURL {
-            item = AVPlayerItem(url: localURL)
+           let live = LocalStreamProxy(originURL: url) {
+            item = AVPlayerItem(url: live.localURL)
             proxy = live
         } else {
             item = AVPlayerItem(url: url)
@@ -326,9 +325,9 @@ class RadioPlayer: NSObject, ObservableObject {
             Task { @MainActor [weak self] in self?.armWatchdog() }
         }
         let failed = center.addObserver(forName: .AVPlayerItemFailedToPlayToEndTime, object: item, queue: .main) { [weak self] note in
-            let err = note.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey]
+            let err = String(describing: note.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey])
             Task { @MainActor [weak self] in
-                playbackLog.error("failed-to-play-to-end: \(String(describing: err), privacy: .public)")
+                playbackLog.error("failed-to-play-to-end: \(err, privacy: .public)")
                 self?.scheduleReconnect()
             }
         }
@@ -1155,11 +1154,13 @@ class RadioPlayer: NSObject, ObservableObject {
     }
 }
 
-extension RadioPlayer: AVPlayerItemMetadataOutputPushDelegate {
-    nonisolated func metadataOutput(_ output: AVPlayerItemMetadataOutput,
-                                    didOutputTimedMetadataGroups groups: [AVTimedMetadataGroup],
-                                    from track: AVPlayerItemTrack?) {
+// Both outputs are set up with `setDelegate(self, queue: .main)`, so the callback already runs on
+// the main actor; `@preconcurrency` lets it be main-actor isolated and checks that at run time.
+extension RadioPlayer: @preconcurrency AVPlayerItemMetadataOutputPushDelegate {
+    func metadataOutput(_ output: AVPlayerItemMetadataOutput,
+                        didOutputTimedMetadataGroups groups: [AVTimedMetadataGroup],
+                        from track: AVPlayerItemTrack?) {
         let items = groups.flatMap { $0.items }
-        Task { @MainActor in await self.handleMetadata(items) }
+        Task { await handleMetadata(items) }
     }
 }

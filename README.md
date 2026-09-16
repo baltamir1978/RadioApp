@@ -24,7 +24,7 @@ App de iOS para escuchar radio por internet con reconocimiento de canciones (Sha
 
 ## Requisitos
 
-- Xcode 26 o superior
+- Xcode 26 o superior (modo de lenguaje Swift 6; probado con Xcode 27)
 - iOS 26.5+
 - Cuenta de desarrollador de Apple (para ShazamKit, CarPlay y widgets en dispositivo real)
 

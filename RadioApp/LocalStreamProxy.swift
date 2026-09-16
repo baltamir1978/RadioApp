@@ -24,31 +24,44 @@ private nonisolated let proxyLog = Logger(subsystem: "com.radioapp.playback", ca
 /// no `Content-Length` — the shape AVPlayer already handles correctly for every station that
 /// works today. Everything else, including the ICY metadata headers that carry song titles, is
 /// passed through untouched.
-nonisolated final class LocalStreamProxy: @unchecked Sendable {
+///
+/// Both types here are actors whose executor is their own serial dispatch queue. Network and
+/// URLSession already call back on that queue, so each callback steps into the actor with
+/// `assumeIsolated` — no extra hop, and events are handled in the order they arrived.
+actor LocalStreamProxy {
     private let originURL: URL
     private let listener: NWListener
-    private let queue = DispatchQueue(label: "radio.streamproxy")
+    private let queue = DispatchSerialQueue(label: "radio.streamproxy")
     /// One relay per accepted connection — AVPlayer may open more than one.
     private var relays: [ObjectIdentifier: Relay] = [:]
     private var stopped = false
 
-    /// The URL to hand AVPlayer. Nil if the listener couldn't be created.
-    private(set) var localURL: URL?
+    /// Set on the listener's queue once it binds; `init` doesn't return until it has been.
+    private let boundURL = OSAllocatedUnfairLock<URL?>(initialState: nil)
+
+    /// The URL to hand AVPlayer.
+    nonisolated var localURL: URL {
+        // Never nil on a proxy that exists: `init` fails unless the listener bound in time.
+        boundURL.withLock { $0 }!
+    }
+
+    nonisolated var unownedExecutor: UnownedSerialExecutor { queue.asUnownedSerialExecutor() }
 
     init?(originURL: URL) {
         self.originURL = originURL
         guard let listener = try? NWListener(using: .tcp) else { return nil }
         self.listener = listener
 
+        // Both handlers go in before `start`: a listener started without a connection handler
+        // fails straight away.
         listener.newConnectionHandler = { [weak self] connection in
-            self?.accept(connection)
+            self?.assumeIsolated { $0.accept(connection) }
         }
-        listener.stateUpdateHandler = { [weak self] state in
-            guard let self else { return }
-            if case .ready = state, let port = self.listener.port {
+        listener.stateUpdateHandler = { [weak self, listener] state in
+            if case .ready = state, let port = listener.port {
                 // The path is cosmetic — the proxy always serves `originURL` — but keeping the
                 // real extension helps AVPlayer pick its parser.
-                self.localURL = URL(string: "http://127.0.0.1:\(port.rawValue)/stream.mp3")
+                self?.boundURL.withLock { $0 = URL(string: "http://127.0.0.1:\(port.rawValue)/stream.mp3") }
                 proxyLog.notice("proxy ready on port \(port.rawValue, privacy: .public)")
             }
         }
@@ -56,35 +69,38 @@ nonisolated final class LocalStreamProxy: @unchecked Sendable {
 
         // The listener needs a moment to bind; the caller needs `localURL` right away.
         let deadline = Date().addingTimeInterval(2)
-        while localURL == nil, Date() < deadline {
+        while boundURL.withLock({ $0 }) == nil, Date() < deadline {
             Thread.sleep(forTimeInterval: 0.01)
         }
-        guard localURL != nil else {
+        guard boundURL.withLock({ $0 }) != nil else {
             listener.cancel()
             return nil
         }
     }
 
     /// Tears down the listener and every in-flight relay. Safe to call more than once.
-    func stop() {
+    nonisolated func stop() {
         queue.async {
-            guard !self.stopped else { return }
-            self.stopped = true
-            self.listener.cancel()
-            for relay in self.relays.values { relay.stop() }
-            self.relays.removeAll()
+            self.assumeIsolated { proxy in
+                guard !proxy.stopped else { return }
+                proxy.stopped = true
+                proxy.listener.cancel()
+                for relay in proxy.relays.values { relay.stop() }
+                proxy.relays.removeAll()
+            }
         }
     }
 
     private func accept(_ connection: NWConnection) {
-        queue.async {
-            guard !self.stopped else { connection.cancel(); return }
-            let relay = Relay(connection: connection, originURL: self.originURL) { [weak self] relay in
-                self?.queue.async { self?.relays.removeValue(forKey: ObjectIdentifier(relay)) }
+        guard !stopped else { connection.cancel(); return }
+        let relay = Relay(connection: connection, originURL: originURL) { [weak self] relay in
+            guard let self else { return }
+            self.queue.async {
+                self.assumeIsolated { _ = $0.relays.removeValue(forKey: ObjectIdentifier(relay)) }
             }
-            self.relays[ObjectIdentifier(relay)] = relay
-            relay.start()
         }
+        relays[ObjectIdentifier(relay)] = relay
+        relay.start()
     }
 }
 
@@ -92,11 +108,11 @@ nonisolated final class LocalStreamProxy: @unchecked Sendable {
 
 /// Pumps one client connection: reads its request, fetches the origin stream without a `Range`
 /// header, and relays the response back rewritten as a plain streaming `200`.
-private final class Relay: NSObject, @unchecked Sendable {
+private actor Relay {
     private let connection: NWConnection
     private let originURL: URL
-    private let onFinish: (Relay) -> Void
-    private let queue = DispatchQueue(label: "radio.streamproxy.relay")
+    private let onFinish: @Sendable (Relay) -> Void
+    private let queue = DispatchSerialQueue(label: "radio.streamproxy.relay")
 
     private var session: URLSession?
     private var task: URLSessionDataTask?
@@ -107,26 +123,36 @@ private final class Relay: NSObject, @unchecked Sendable {
     private var backlog = 0
     private let maxBacklog = 4 << 20
 
-    init(connection: NWConnection, originURL: URL, onFinish: @escaping (Relay) -> Void) {
+    nonisolated var unownedExecutor: UnownedSerialExecutor { queue.asUnownedSerialExecutor() }
+
+    init(connection: NWConnection, originURL: URL, onFinish: @escaping @Sendable (Relay) -> Void) {
         self.connection = connection
         self.originURL = originURL
         self.onFinish = onFinish
-        super.init()
     }
 
-    func start() {
+    /// Called from the proxy's queue; the relay's own work starts on its queue.
+    nonisolated func start() {
+        queue.async {
+            self.assumeIsolated { $0.begin() }
+        }
+    }
+
+    nonisolated func stop() {
+        queue.async {
+            self.assumeIsolated { $0.finish() }
+        }
+    }
+
+    private func begin() {
         connection.stateUpdateHandler = { [weak self] state in
             switch state {
-            case .cancelled, .failed: self?.finish()
+            case .cancelled, .failed: self?.assumeIsolated { $0.finish() }
             default: break
             }
         }
         connection.start(queue: queue)
         readRequest()
-    }
-
-    func stop() {
-        queue.async { self.finish() }
     }
 
     private func finish() {
@@ -146,20 +172,21 @@ private final class Relay: NSObject, @unchecked Sendable {
     /// whether the origin interleaves song titles into the audio.
     private func readRequest() {
         connection.receive(minimumIncompleteLength: 1, maximumLength: 8192) { [weak self] data, _, isComplete, error in
-            guard let self else { return }
-            if let error {
-                proxyLog.error("client read failed: \(String(describing: error), privacy: .public)")
-                self.finish()
-                return
-            }
-            if let data { self.requestBytes.append(data) }
-            if let range = self.requestBytes.range(of: Data("\r\n\r\n".utf8)) {
-                let head = String(decoding: self.requestBytes[..<range.lowerBound], as: UTF8.self)
-                self.openOrigin(wantsICYMetadata: head.lowercased().contains("icy-metadata: 1"))
-            } else if isComplete {
-                self.finish()
-            } else {
-                self.readRequest()
+            self?.assumeIsolated { relay in
+                if let error {
+                    proxyLog.error("client read failed: \(String(describing: error), privacy: .public)")
+                    relay.finish()
+                    return
+                }
+                if let data { relay.requestBytes.append(data) }
+                if let range = relay.requestBytes.range(of: Data("\r\n\r\n".utf8)) {
+                    let head = String(decoding: relay.requestBytes[..<range.lowerBound], as: UTF8.self)
+                    relay.openOrigin(wantsICYMetadata: head.lowercased().contains("icy-metadata: 1"))
+                } else if isComplete {
+                    relay.finish()
+                } else {
+                    relay.readRequest()
+                }
             }
         }
     }
@@ -170,7 +197,12 @@ private final class Relay: NSObject, @unchecked Sendable {
         let config = URLSessionConfiguration.ephemeral
         config.requestCachePolicy = .reloadIgnoringLocalCacheData
         config.timeoutIntervalForRequest = 30
-        let session = URLSession(configuration: config, delegate: self, delegateQueue: nil)
+        // Delegate callbacks run on the relay's queue, so they can step straight into the actor.
+        let delegateQueue = OperationQueue()
+        delegateQueue.underlyingQueue = queue
+        delegateQueue.maxConcurrentOperationCount = 1
+        let session = URLSession(configuration: config, delegate: OriginDelegate(relay: self),
+                                 delegateQueue: delegateQueue)
         self.session = session
 
         var request = URLRequest(url: originURL)
@@ -181,8 +213,8 @@ private final class Relay: NSObject, @unchecked Sendable {
         task.resume()
     }
 
-    /// Rewrites the origin's response into a plain streaming 200 and sends it to the client.
-    private func sendHeaders(for response: HTTPURLResponse) {
+    /// Rewrites the origin's response into a plain streaming 200 for the client.
+    fileprivate nonisolated static func responseHead(for response: HTTPURLResponse) -> String {
         var head = "HTTP/1.1 200 OK\r\n"
         head += "Content-Type: \(response.value(forHTTPHeaderField: "Content-Type") ?? "audio/mpeg")\r\n"
         // The two lines that matter: never advertise range support, never advertise a length.
@@ -198,7 +230,7 @@ private final class Relay: NSObject, @unchecked Sendable {
             }
         }
         head += "\r\n"
-        send(Data(head.utf8))
+        return head
     }
 
     private func send(_ data: Data) {
@@ -210,51 +242,66 @@ private final class Relay: NSObject, @unchecked Sendable {
             return
         }
         connection.send(content: data, completion: .contentProcessed { [weak self] error in
-            guard let self else { return }
-            self.queue.async {
-                self.backlog -= data.count
+            self?.assumeIsolated { relay in
+                relay.backlog -= data.count
                 if let error {
                     proxyLog.error("client write failed: \(String(describing: error), privacy: .public)")
-                    self.finish()
+                    relay.finish()
                 }
             }
         })
     }
+
+    // MARK: Origin callbacks
+
+    /// `head` is nil when the origin didn't answer over HTTP.
+    fileprivate func originResponded(head: String?) -> URLSession.ResponseDisposition {
+        guard !finished, let head else { return .cancel }
+        if !sentHeaders {
+            sentHeaders = true
+            send(Data(head.utf8))
+        }
+        return .allow
+    }
+
+    fileprivate func originSent(_ data: Data) {
+        guard !finished else { return }
+        send(data)
+    }
+
+    fileprivate func originEnded(_ error: Error?) {
+        // A live broadcast should never end cleanly either; closing the client connection lets
+        // the player's reconnect logic notice and rebuild. A cancellation is routine — AVPlayer
+        // opens a probe connection and drops it as soon as it has sniffed the format.
+        if let error, (error as? URLError)?.code != .cancelled {
+            proxyLog.error("origin ended: \(String(describing: error), privacy: .public)")
+        }
+        finish()
+    }
 }
 
-extension Relay: URLSessionDataDelegate {
-    nonisolated func urlSession(_ session: URLSession, dataTask: URLSessionDataTask,
-                                didReceive response: URLResponse,
-                                completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
-        queue.async {
-            guard !self.finished, let http = response as? HTTPURLResponse else {
-                completionHandler(.cancel)
-                return
-            }
-            if !self.sentHeaders {
-                self.sentHeaders = true
-                self.sendHeaders(for: http)
-            }
-            completionHandler(.allow)
-        }
+/// URLSession needs an `NSObject` delegate, which an actor can't be. It is called on the relay's
+/// queue (see `openOrigin`) and forwards straight into the relay. The session keeps it — and so
+/// the relay — alive until `finish()` invalidates the session.
+private nonisolated final class OriginDelegate: NSObject, URLSessionDataDelegate, Sendable {
+    private let relay: Relay
+
+    init(relay: Relay) {
+        self.relay = relay
     }
 
-    nonisolated func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
-        queue.async {
-            guard !self.finished else { return }
-            self.send(data)
-        }
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask,
+                    didReceive response: URLResponse,
+                    completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+        let head = (response as? HTTPURLResponse).map(Relay.responseHead(for:))
+        completionHandler(relay.assumeIsolated { $0.originResponded(head: head) })
     }
 
-    nonisolated func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        queue.async {
-            // A live broadcast should never end cleanly either; closing the client connection lets
-            // the player's reconnect logic notice and rebuild. A cancellation is routine — AVPlayer
-            // opens a probe connection and drops it as soon as it has sniffed the format.
-            if let error, (error as? URLError)?.code != .cancelled {
-                proxyLog.error("origin ended: \(String(describing: error), privacy: .public)")
-            }
-            self.finish()
-        }
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        relay.assumeIsolated { $0.originSent(data) }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        relay.assumeIsolated { $0.originEnded(error) }
     }
 }

@@ -20,11 +20,11 @@ struct NowPlayingProvider: TimelineProvider {
         )
     }
 
-    func getSnapshot(in context: Context, completion: @escaping (NowPlayingEntry) -> Void) {
+    func getSnapshot(in context: Context, completion: @escaping @Sendable (NowPlayingEntry) -> Void) {
         Task { completion(await makeEntry()) }
     }
 
-    func getTimeline(in context: Context, completion: @escaping (Timeline<NowPlayingEntry>) -> Void) {
+    func getTimeline(in context: Context, completion: @escaping @Sendable (Timeline<NowPlayingEntry>) -> Void) {
         Task { completion(Timeline(entries: [await makeEntry()], policy: .never)) }
     }
 

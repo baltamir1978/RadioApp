@@ -188,7 +188,7 @@ struct AppIconView: View {
 }
 
 /// The squared chrome carry handle that arcs over the radio body.
-private struct HandleArc: Shape {
+private nonisolated struct HandleArc: Shape {
     func path(in rect: CGRect) -> Path {
         let s = rect.width / 1024
         let cX = rect.midX

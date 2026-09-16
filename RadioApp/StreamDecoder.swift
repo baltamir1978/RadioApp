@@ -220,16 +220,16 @@ nonisolated final class StreamDecoder: NSObject, URLSessionDataDelegate, @unchec
 
 // These are stateless C function pointers; they must be callable from the audio / URLSession
 // background threads, so they opt out of the project's default main-actor isolation.
-nonisolated(unsafe) private let streamPropertyProc: AudioFileStream_PropertyListenerProc = { clientData, streamID, propertyID, _ in
+nonisolated private let streamPropertyProc: AudioFileStream_PropertyListenerProc = { clientData, streamID, propertyID, _ in
     Unmanaged<StreamDecoder>.fromOpaque(clientData).takeUnretainedValue().onProperty(streamID, propertyID)
 }
 
-nonisolated(unsafe) private let streamPacketsProc: AudioFileStream_PacketsProc = { clientData, numberBytes, numberPackets, inputData, packetDescriptions in
+nonisolated private let streamPacketsProc: AudioFileStream_PacketsProc = { clientData, numberBytes, numberPackets, inputData, packetDescriptions in
     Unmanaged<StreamDecoder>.fromOpaque(clientData).takeUnretainedValue()
         .onPackets(numberBytes, numberPackets, inputData, packetDescriptions)
 }
 
-nonisolated(unsafe) private let converterInputProc: AudioConverterComplexInputDataProc = { _, ioNumberDataPackets, ioData, outDataPacketDescription, context in
+nonisolated private let converterInputProc: AudioConverterComplexInputDataProc = { _, ioNumberDataPackets, ioData, outDataPacketDescription, context in
     guard let context else {
         ioNumberDataPackets.pointee = 0
         return noErr

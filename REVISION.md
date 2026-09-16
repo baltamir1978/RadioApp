@@ -1,6 +1,6 @@
 # Revisión de código — RadioApp
 
-Estado del proyecto y trabajo pendiente. Actualizado el 08/09/2026, tras la ronda de arreglos de audio en marcha (v1.2).
+Estado del proyecto y trabajo pendiente. Actualizado el 16/09/2026, tras la migración a Swift 6 con Xcode 27.
 
 ## Resumen
 
@@ -22,6 +22,10 @@ App SwiftUI bien estructurada por responsabilidades (player, stores, servicios, 
 - ✅ **Cuelgue silencioso** (08/09/2026): `handleTimeControl(.paused)` solo desarmaba el vigilante, así que un `AVPlayer` que se pausaba solo dejaba `isPlaying == true` sin audio y había que pulsar play dos veces. Ahora `scheduleUnexpectedPauseRecovery()` reintenta de forma escalonada y reconstruye el stream si reanudar no basta.
 - ✅ **Salto al altavoz del móvil** (08/09/2026): al desaparecer el Bluetooth del coche, la reconexión reanudaba sobre la ruta nueva y la radio empezaba a sonar por el teléfono. Se observa `routeChangeNotification`, y `.oldDeviceUnavailable` pausa en vez de reintentar. Retirado además `.allowBluetoothHFP` de la sesión `.playback`.
 - ✅ **Carátulas que no llegaban** (08/09/2026): un solo fallo de red condenaba a la canción entera a quedarse con el logo, porque la clave se marcaba como buscada antes de conocer el resultado. Ahora se distingue "sin carátula" de "falló la red", con reintentos y caché por canción.
+- ✅ **Migración a Swift 6** (16/09/2026): `SWIFT_VERSION = 6.0` en todos los targets, compila sin avisos con Xcode 27. Lo que destapó:
+  - `LocalStreamProxy` y su `Relay` estaban aislados en el actor principal por el aislamiento por defecto del proyecto, pero los llaman las colas de Network y URLSession; en Swift 6 eso cierra la app en cuanto llega tráfico. Ahora son `actor` con su propia `DispatchSerialQueue` como ejecutor, y cada callback entra con `assumeIsolated`, sin saltos ni reordenación. `NWListener` exige `newConnectionHandler` **antes** de `start`. Probado con el stream de Cassette FM: sondeo `Range: bytes=0-1` → `200` con cabeceras ICY, dos conexiones a la vez y `stop()` repetido.
+  - `StreamSinkBox` pasa a `Sendable` con `OSAllocatedUnfairLock`, y los tres callbacks C de `StreamDecoder` dejan de necesitar `nonisolated(unsafe)`. Quedan dos `@unchecked Sendable`, justificados: `StreamMatcher` (guarda un `SHSession`, que no es `Sendable`) y `StreamDecoder` (estado C de AudioToolbox confinado a la cola de URLSession).
+  - El delegado de metadatos ICY es ahora `@preconcurrency` y aislado en el actor principal, que es donde ya se entregaba (`queue: .main`).
 
 ## Puntos fuertes
 
@@ -36,7 +40,7 @@ App SwiftUI bien estructurada por responsabilidades (player, stores, servicios, 
 - `NSAllowsArbitraryLoads = true` permite tráfico HTTP sin cifrar. Es habitual en apps de radio (muchos streams siguen siendo HTTP), pero conviene restringirlo por dominio con `NSExceptionDomains` para pasar mejor la revisión de App Store, o al menos dejar por escrito el motivo en la ficha de revisión.
 
 ### Pruebas
-- **No hay tests.** Para la lógica pura serían baratos y útiles: parseo de la respuesta de Radio Browser, `Station.initials`, el parseo de deep links, `IgnoredTitle.key(station:title:)` y la reescritura de cabeceras de `LocalStreamProxy`.
+- **No hay tests.** Para la lógica pura serían baratos y útiles: parseo de la respuesta de Radio Browser, `Station.initials`, el parseo de deep links, `IgnoredTitle.key(station:title:)` y la reescritura de cabeceras de `LocalStreamProxy` (ya es una función pura: `Relay.responseHead(for:)`).
 
 ### Verificación en dispositivo
 Lo que el simulador no cubre y sólo se puede comprobar en el coche o en el iPhone:
@@ -47,3 +51,5 @@ Lo que el simulador no cubre y sólo se puede comprobar en el coche o en el iPho
   se quede muda tras una llamada, que al perder el Bluetooth calle en vez de pasar al altavoz, y
   que Los 40 muestre la carátula del disco. Las trazas de `com.radioapp.playback` (tabla en el
   README) dicen por cuál de los caminos ha ido cada caso.
+- **La migración a Swift 6** en el iPhone y en el coche: reproducción a través del proxy, reconexiones
+  y metadatos ICY. Un fallo de aislamiento aquí no da error, cierra la app.
