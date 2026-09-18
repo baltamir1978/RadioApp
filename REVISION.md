@@ -1,6 +1,6 @@
 # Revisión de código — RadioApp
 
-Estado del proyecto y trabajo pendiente. Actualizado el 16/09/2026, tras la migración a Swift 6 con Xcode 27.
+Estado del proyecto y trabajo pendiente. Actualizado el 18/09/2026.
 
 ## Resumen
 
@@ -26,6 +26,7 @@ App SwiftUI bien estructurada por responsabilidades (player, stores, servicios, 
   - `LocalStreamProxy` y su `Relay` estaban aislados en el actor principal por el aislamiento por defecto del proyecto, pero los llaman las colas de Network y URLSession; en Swift 6 eso cierra la app en cuanto llega tráfico. Ahora son `actor` con su propia `DispatchSerialQueue` como ejecutor, y cada callback entra con `assumeIsolated`, sin saltos ni reordenación. `NWListener` exige `newConnectionHandler` **antes** de `start`. Probado con el stream de Cassette FM: sondeo `Range: bytes=0-1` → `200` con cabeceras ICY, dos conexiones a la vez y `stop()` repetido.
   - `StreamSinkBox` pasa a `Sendable` con `OSAllocatedUnfairLock`, y los tres callbacks C de `StreamDecoder` dejan de necesitar `nonisolated(unsafe)`. Quedan dos `@unchecked Sendable`, justificados: `StreamMatcher` (guarda un `SHSession`, que no es `Sendable`) y `StreamDecoder` (estado C de AudioToolbox confinado a la cola de URLSession).
   - El delegado de metadatos ICY es ahora `@preconcurrency` y aislado en el actor principal, que es donde ya se entregaba (`queue: .main`).
+- ✅ **Cierre inmediato al elegir emisora** (18/09/2026): secuela de la migración a Swift 6. El `requestHandler` de `MPMediaItemArtwork` se construía dentro de un `MainActor.run`, así que heredaba el aislamiento del actor principal; pero `MPNowPlayingInfoCenter` lo llama desde su propia cola, y en Swift 6 el compilador mete ahí una comprobación de ejecutor que aborta el proceso (`BUG IN CLIENT OF LIBDISPATCH: Block was expected to execute on queue [com.apple.main-thread]`, `EXC_BREAKPOINT`). Como la carátula se carga nada más arrancar una emisora, la app se cerraba siempre. La carátula se construye ahora antes de volver al actor principal, en contexto no aislado. Comprobado en el simulador con iOS 26.5: cuatro emisoras encadenadas (Cassette FM, Kiss FM, Cadena 100, La Indie), audio en las cuatro y ningún informe de cierre.
 
 ## Puntos fuertes
 

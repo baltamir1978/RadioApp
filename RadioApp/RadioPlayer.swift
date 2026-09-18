@@ -1111,9 +1111,15 @@ class RadioPlayer: NSObject, ObservableObject {
         let token = artworkToken
         Task.detached(priority: .utility) {
             let image = await Self.artworkImage(urlString: preferredURL, initials: initials, seed: seed)
+            // Built here, off the main actor, on purpose. MPNowPlayingInfoCenter calls this
+            // request handler on its own queue; created inside the `MainActor.run` below it would
+            // inherit main-actor isolation from the project's default, and Swift 6 would trap
+            // ("Block was expected to execute on queue com.apple.main-thread") the first time
+            // MediaPlayer asked for the image — which is immediately, while starting a station.
+            let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
             await MainActor.run { [weak self] in
                 guard let self, token == self.artworkToken else { return }
-                self.nowPlayingArtwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+                self.nowPlayingArtwork = artwork
                 self.updateNowPlayingInfo()
             }
         }
