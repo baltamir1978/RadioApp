@@ -16,7 +16,7 @@ App de iOS para escuchar radio por internet con reconocimiento de canciones (Sha
 - 🔄 **Resistencia a cortes de red**: reconexión automática de streams caídos (pensada para 5G en movimiento) y un proxy local (`LocalStreamProxy`) que rescata emisoras cuyo servidor describe mal el stream.
 - 🎧 **Cuidado con la ruta de audio**: si el equipo del coche o los auriculares desaparecen, la app calla en vez de seguir sonando por el altavoz del móvil; y una pausa que el usuario no ha pedido (una llamada, Siri) se recupera sola.
 - 🕑 **Historial** de canciones escuchadas, con favoritos y una lista de títulos ignorados que mantiene fuera los eslóganes de la emisora.
-- 📱 **Widgets** (WidgetKit): emisora en reproducción —en tamaño grande y extragrande, con la carátula y la letra avanzando línea a línea; al tocarlo se abre el reproductor— y acceso rápido a emisoras. El de accesos directos es **configurable**: mantén pulsado el widget → *Editar* y elige qué emisora va en cada uno de los cuatro huecos.
+- 📱 **Widgets** (WidgetKit): emisora en reproducción —en tamaño grande y extragrande, con la carátula y la letra avanzando línea a línea; al tocarlo se abre el reproductor—, **Letra** en tamaño pequeño y mediano (la canción arriba y la línea que suena con las siguientes debajo) y acceso rápido a emisoras. El de accesos directos es **configurable**: mantén pulsado el widget → *Editar* y elige qué emisora va en cada uno de los cuatro huecos.
 - 🚗 **CarPlay** mediante `CarPlaySceneDelegate`, con panel en el salpicadero (`CarPlayDashboardSceneDelegate`).
 - 🗣️ **Atajos de Siri** (`SiriIntents`).
 - 🌗 **Modo claro y oscuro** con colores adaptativos.

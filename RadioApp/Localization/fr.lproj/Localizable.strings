@@ -73,6 +73,8 @@
 "widget_stations_desc" = "Vos stations en raccourcis : maintenez le widget appuyé pour choisir lesquelles.";
 "widget_now_playing_title" = "En écoute";
 "widget_now_playing_desc" = "Affiche la station et la chanson que vous écoutez et, en grande taille, ses paroles. Touchez pour ouvrir l’app.";
+"widget_lyrics_title" = "Paroles";
+"widget_lyrics_desc" = "Les paroles de la chanson en cours, en rythme. Touchez pour ouvrir l’app.";
 "widget_choose_station" = "Choisissez une station";
 "paused" = "En pause";
 

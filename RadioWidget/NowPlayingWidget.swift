@@ -227,19 +227,7 @@ struct NowPlayingWidgetView: View {
         .containerBackground(.clear, for: .widget)
     }
 
-    private var placeholder: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "radio")
-                .font(.system(size: 34))
-                .foregroundStyle(Color.wBrand)
-            Text(NSLocalizedString("widget_choose_station", value: "Elige una emisora", comment: ""))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .containerBackground(Color.wBackground, for: .widget)
-    }
+    private var placeholder: some View { WidgetPlaceholder() }
 
     @ViewBuilder
     private func logo(size: CGFloat) -> some View {
@@ -266,13 +254,17 @@ private struct WidgetLyrics: View {
     let snapshot: NowPlayingSnapshot?
     let lyricIndex: Int?
     let maxLines: Int
+    /// Small type and no heading, for the lyrics widget's small and medium sizes.
+    var compact = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Label(NSLocalizedString("lyrics_title", value: "Letra", comment: ""), systemImage: "quote.bubble")
-                .font(.caption2.weight(.semibold))
-                .textCase(.uppercase)
-                .foregroundStyle(Color.wBrand)
+            if !compact {
+                Label(NSLocalizedString("lyrics_title", value: "Letra", comment: ""), systemImage: "quote.bubble")
+                    .font(.caption2.weight(.semibold))
+                    .textCase(.uppercase)
+                    .foregroundStyle(Color.wBrand)
+            }
             content
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -297,7 +289,7 @@ private struct WidgetLyrics: View {
 
     private func note(_ key: String) -> some View {
         Text(NSLocalizedString(key, comment: ""))
-            .font(.subheadline)
+            .font(compact ? .caption : .subheadline)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
     }
@@ -305,20 +297,110 @@ private struct WidgetLyrics: View {
     private func lines(_ lyrics: SongLyrics) -> some View {
         let all = lyrics.lines
         let current = lyricIndex
-        // Keep one sung line above the current one for context.
-        let first = max(0, min((current ?? 0) - 1, all.count - maxLines))
+        // Keep one sung line above the current one for context, except when space is tight.
+        let first = max(0, min((current ?? 0) - (compact ? 0 : 1), all.count - maxLines))
         let window = Array(all.enumerated()).dropFirst(first).prefix(maxLines)
-        return VStack(alignment: .leading, spacing: 5) {
+        return VStack(alignment: .leading, spacing: compact ? 3 : 5) {
             ForEach(Array(window), id: \.offset) { index, text in
                 let isCurrent = index == current
                 let isPast = current.map { index < $0 } ?? false
                 Text(text.isEmpty ? "♪" : text)
-                    .font(isCurrent ? .body.weight(.semibold) : .subheadline)
+                    .font(isCurrent ? (compact ? .subheadline.weight(.semibold) : .body.weight(.semibold))
+                                    : (compact ? .caption : .subheadline))
                     .foregroundStyle(isCurrent ? AnyShapeStyle(Color.primary)
                                      : isPast ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.secondary))
                     .lineLimit(isCurrent ? 2 : 1)
             }
         }
+    }
+}
+
+/// Shown while no station has been played yet.
+private struct WidgetPlaceholder: View {
+    var body: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "radio")
+                .font(.system(size: 34))
+                .foregroundStyle(Color.wBrand)
+            Text(NSLocalizedString("widget_choose_station", value: "Elige una emisora", comment: ""))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .containerBackground(Color.wBackground, for: .widget)
+    }
+}
+
+// MARK: - Lyrics widget
+
+/// The small and medium sizes given over to the lyrics: the song in one line on top and the
+/// line being sung, with the next ones under it.
+struct LyricsWidgetView: View {
+    var entry: NowPlayingEntry
+    @Environment(\.widgetFamily) private var family
+
+    var body: some View {
+        if let snap = entry.snapshot {
+            VStack(alignment: .leading, spacing: 8) {
+                header(snap)
+                WidgetLyrics(snapshot: snap, lyricIndex: entry.lyricIndex, maxLines: 4, compact: true)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .containerBackground(Color.wBackground, for: .widget)
+        } else {
+            WidgetPlaceholder()
+        }
+    }
+
+    private func header(_ snap: NowPlayingSnapshot) -> some View {
+        let side: CGFloat = family == .systemSmall ? 28 : 34
+        let track = snap.track.flatMap { $0.isEmpty ? nil : $0 }
+        return HStack(spacing: 7) {
+            artwork
+                .frame(width: side, height: side)
+                .clipShape(RoundedRectangle(cornerRadius: side * 0.22, style: .continuous))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(track ?? snap.stationName)
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                Text(track != nil ? (snap.artist.flatMap { $0.isEmpty ? nil : $0 } ?? snap.stationName)
+                     : snap.isPlaying ? NSLocalizedString("live", value: "En directo", comment: "")
+                     : NSLocalizedString("paused", value: "En pausa", comment: ""))
+                    .font(.caption2)
+                    .foregroundStyle(Color.wBrand)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// The cover when there is one, else the station's logo.
+    @ViewBuilder
+    private var artwork: some View {
+        if let data = entry.cover ?? entry.logo, let ui = UIImage(data: data) {
+            Image(uiImage: ui).resizable().aspectRatio(contentMode: .fill).background(Color.white)
+        } else {
+            ZStack {
+                Color.wSurface
+                Image(systemName: "radio.fill").font(.caption).foregroundStyle(Color.wBrand)
+            }
+        }
+    }
+}
+
+struct LyricsWidget: Widget {
+    let kind = "LyricsWidget"
+
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: kind, provider: NowPlayingProvider()) { entry in
+            LyricsWidgetView(entry: entry)
+                .widgetURL(URL(string: "radioapp://nowplaying"))
+        }
+        .configurationDisplayName(NSLocalizedString("widget_lyrics_title", value: "Letra", comment: ""))
+        .description(NSLocalizedString("widget_lyrics_desc", value: "La letra de la canción que suena, al compás. Tócalo para abrir la app.", comment: ""))
+        .supportedFamilies([.systemSmall, .systemMedium])
     }
 }
 

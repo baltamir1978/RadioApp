@@ -73,6 +73,8 @@
 "widget_stations_desc" = "As suas estações em atalhos: mantenha o widget premido para escolher quais.";
 "widget_now_playing_title" = "A tocar agora";
 "widget_now_playing_desc" = "Mostra a estação e a música que está a ouvir e, no tamanho grande, a letra. Toque para abrir a app.";
+"widget_lyrics_title" = "Letra";
+"widget_lyrics_desc" = "A letra da música que está a tocar, ao ritmo dela. Toque para abrir a app.";
 "widget_choose_station" = "Escolha uma estação";
 "paused" = "Em pausa";
 

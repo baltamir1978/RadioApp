@@ -33,7 +33,7 @@ App SwiftUI bien estructurada por responsabilidades (player, stores, servicios, 
   - Inicio de canción por el cambio de título (marca de tiempo del bloque de metadatos, menos el retraso aprendido de la emisora) y por Shazam a los ~20 s; ajuste − / + / ↺ por emisora y toque en la línea que suena; títulos caducados y emisoras sin títulos nombrados por Shazam; búsqueda de letras de colaboraciones.
   - `StreamDecoder` no pasa a Shazam la ráfaga inicial de audio atrasado (en MacRadio dejaba la letra ~1 s tarde).
   - Las identificaciones automáticas solo con la app en pantalla (cada una abre una segunda conexión); al volver se ponen al día.
-  - Reproductor y letra lado a lado en pantallas anchas (plegable abierto, iPad), con la hoja a tamaño de página; en el iPhone, «Ver letra». Widget «Sonando ahora» en tamaño grande y extragrande con la letra por líneas; al tocarlo abre el reproductor (`radioapp://nowplaying`).
+  - Reproductor y letra lado a lado en pantallas anchas (plegable abierto, iPad), con la hoja a tamaño de página; en el iPhone, «Ver letra». Widget «Sonando ahora» en tamaño grande y extragrande con la letra por líneas; al tocarlo abre el reproductor (`radioapp://nowplaying`). Widget «Letra» aparte, en tamaño pequeño y mediano, con el mismo proveedor de líneas.
   - Comprobado en el simulador (iPhone 18 Pro y iPad mini, iOS 27): Cadena 100 con Shazam por la segunda conexión (6 s de ráfaga descartados), letra sincronizada y dos columnas en el iPad. De paso: la etiqueta «EN DIRECTO» salía cortada («E…») y `Tools/add_widget_target.rb` seguía en Swift 5.0.
 
 ## Puntos fuertes

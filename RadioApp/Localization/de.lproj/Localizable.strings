@@ -73,6 +73,8 @@
 "widget_stations_desc" = "Deine Sender als Kurzbefehle: Halte das Widget gedrückt, um sie auszuwählen.";
 "widget_now_playing_title" = "Läuft gerade";
 "widget_now_playing_desc" = "Zeigt den Sender und den Song, den du hörst, und in der großen Größe den Songtext. Tippe, um die App zu öffnen.";
+"widget_lyrics_title" = "Songtext";
+"widget_lyrics_desc" = "Der Songtext des laufenden Songs, im Takt. Tippe, um die App zu öffnen.";
 "widget_choose_station" = "Sender auswählen";
 "paused" = "Pausiert";
 

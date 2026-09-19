@@ -73,6 +73,8 @@
 "widget_stations_desc" = "Your stations as shortcuts: touch and hold the widget to choose which ones.";
 "widget_now_playing_title" = "Now playing";
 "widget_now_playing_desc" = "Shows the station and the song you’re listening to and, in the large size, its lyrics. Tap to open the app.";
+"widget_lyrics_title" = "Lyrics";
+"widget_lyrics_desc" = "The lyrics of the song that’s playing, in time with it. Tap to open the app.";
 "widget_choose_station" = "Choose a station";
 "paused" = "Paused";
 

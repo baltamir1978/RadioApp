@@ -77,6 +77,8 @@
 "widget_stations_desc" = "Tus emisoras en accesos directos: mantén pulsado el widget para elegir cuáles.";
 "widget_now_playing_title" = "Sonando ahora";
 "widget_now_playing_desc" = "Muestra la emisora y la canción que estás escuchando y, en tamaño grande, su letra. Tócalo para abrir la app.";
+"widget_lyrics_title" = "Letra";
+"widget_lyrics_desc" = "La letra de la canción que suena, al compás. Tócalo para abrir la app.";
 "widget_choose_station" = "Elige una emisora";
 "paused" = "En pausa";
 

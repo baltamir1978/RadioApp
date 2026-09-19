@@ -5,6 +5,7 @@ import SwiftUI
 struct RadioWidgetBundle: WidgetBundle {
     var body: some Widget {
         NowPlayingWidget()
+        LyricsWidget()
         QuickStationsWidget()
     }
 }
