@@ -7,7 +7,7 @@ class CarPlayBridge {
 
     let player = RadioPlayer.shared
     let store = StationsStore.shared
-    let shazam = ShazamService()
+    let shazam = ShazamService.shared
 
     private init() {}
 }

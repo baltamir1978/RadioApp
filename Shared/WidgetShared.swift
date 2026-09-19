@@ -56,6 +56,48 @@ struct NowPlayingSnapshot: Codable {
     var artist: String?
     var logoURL: String?
     var isPlaying: Bool
+    /// The song's cover, when one was found; the widget falls back to the logo.
+    var coverURL: String? = nil
+    var lyrics: SongLyrics? = nil
+    var lyricsPending: Bool = false
+    /// When the lyrics' clock starts: the song's start with the app's lead and the station's
+    /// adjustment already applied. Only drives the lyrics when `songStartIsExact`.
+    var songStartedAt: Date? = nil
+    var songStartIsExact: Bool = false
+}
+
+// MARK: - Lyrics
+
+nonisolated struct LyricLine: Codable, Sendable, Hashable {
+    /// Seconds from the start of the song.
+    var time: Double
+    var text: String
+}
+
+nonisolated struct SongLyrics: Codable, Sendable, Equatable {
+    /// Time-stamped lines; empty when the source only has plain text.
+    var synced: [LyricLine]
+    var plain: [String]
+    var isInstrumental: Bool
+    /// The song's length in seconds, when the source knows it.
+    var duration: Double? = nil
+
+    var isEmpty: Bool { synced.isEmpty && plain.isEmpty }
+
+    /// Lines to display, whichever form we have.
+    var lines: [String] {
+        synced.isEmpty ? plain : synced.map(\.text)
+    }
+
+    /// Index of the line being sung `elapsed` seconds into the song, or nil before the first.
+    func lineIndex(at elapsed: Double) -> Int? {
+        guard !synced.isEmpty else { return nil }
+        var found: Int?
+        for (i, line) in synced.enumerated() {
+            if line.time <= elapsed { found = i } else { break }
+        }
+        return found
+    }
 }
 
 /// A station the widget can launch via the `radioapp://play?u=<streamURL>` deep link.

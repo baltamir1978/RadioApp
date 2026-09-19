@@ -82,6 +82,60 @@ class RadioPlayer: NSObject, ObservableObject {
     /// drop a stale Shazam title on re-identify without wiping real station metadata.
     private var trackIsFromShazam = false
 
+    // MARK: Lyrics
+    @Published private(set) var lyrics: SongLyrics?
+    @Published private(set) var lyricsPending = false
+    /// When the current song started, and whether that time can be trusted to follow the lyrics:
+    /// we saw the title change, or ShazamKit said how far into the song we are.
+    @Published private(set) var songStartedAt: Date?
+    @Published private(set) var songStartIsExact = false
+    /// How much earlier (positive) or later the lyrics run for this station, set by hand.
+    @Published private(set) var lyricsOffset: Double = 0
+    /// Lines light up this much before they're sung, so reading keeps pace with singing.
+    private static let lyricsLead: Double = 1
+    /// "artist|title" of the song on screen, whatever named it.
+    private var lastSongKey: String?
+    private var lyricsCache: [String: SongLyrics?] = [:]
+    private var lyricsLookupsInFlight: Set<String> = []
+    /// The first title after tuning in belongs to a song already under way; only a change heard
+    /// while listening marks a song's real start.
+    private var sawTitleSinceTuning = false
+    /// ShazamKit has placed a song on this station since tuning in: from then on it places each
+    /// one, so a hand adjustment only holds for the song it was made on.
+    private var shazamSyncsLyrics = false
+    /// ShazamKit placed the song on screen (so returning to the app needn't ask again).
+    private var songPlacedByShazam = false
+
+    // MARK: Recognition on its own
+    /// Whether the station has named a song since tuning in. The ones that don't (Kiss FM) get
+    /// their songs named by ShazamKit.
+    private var stationSendsTitles = false
+    private var autoIdentifyTask: Task<Void, Never>?
+    private var missedIdentifications = 0
+    /// When the current song's title change was heard — kept to measure how late the station
+    /// changes its titles against ShazamKit's exact position.
+    private var titleChangeHeardAt: Date?
+    private var syncIdentifyTask: Task<Void, Never>?
+    /// A title the station kept sending after its song was over (Cadena 100 does). While set, a
+    /// re-delivery of it is ignored and ShazamKit names what's on air until the title changes.
+    private var staleTitleKey: String?
+    private var staleTitleTask: Task<Void, Never>?
+    /// ShazamKit was asked because the song on screen should be over by now.
+    private var checkingStaleTitle = false
+    private static let staleTitleGrace: Double = 20
+    private static let assumedSongLength: Double = 300
+    private var foregroundTask: Task<Void, Never>?
+
+    /// Whether ShazamKit, not the stream, names the songs right now.
+    private var shazamNamesSongs: Bool { !stationSendsTitles || staleTitleKey != nil }
+
+    /// Recognition the user didn't ask for only runs with the app on screen, where the lyrics
+    /// are read: in the car or in a pocket it would be a second connection's worth of mobile
+    /// data per song for nobody. Coming back catches up (see `catchUpOnReturn`).
+    private var mayIdentifyOnItsOwn: Bool {
+        UIApplication.shared.applicationState == .active && LyricsFeature.embedded
+    }
+
     // MARK: Reconnection
     /// True while the user wants audio. Survives transient network drops so the watchdog
     /// knows to keep rebuilding the connection. Distinct from `isPlaying`, which tracks
@@ -142,6 +196,8 @@ class RadioPlayer: NSObject, ObservableObject {
         setupInterruptionHandling()
         setupRouteChangeHandling()
         setupPathMonitor()
+        setupShazam()
+        setupForegroundHandling()
     }
 
     func play(_ station: Station) {
@@ -154,6 +210,14 @@ class RadioPlayer: NSObject, ObservableObject {
         currentAppleMusicURL = nil
         lastArtworkKey = nil
         trackIsFromShazam = false
+        clearSong()
+        sawTitleSinceTuning = false
+        stationSendsTitles = false
+        missedIdentifications = 0
+        shazamSyncsLyrics = false
+        staleTitleKey = nil
+        checkingStaleTitle = false
+        lyricsOffset = UserDefaults.standard.double(forKey: "lyrics_offset." + station.streamURL)
         isLoading = true
         intendsToPlay = true
         reconnectAttempt = 0
@@ -198,6 +262,11 @@ class RadioPlayer: NSObject, ObservableObject {
 
         let player = AVPlayer(playerItem: item)
         player.automaticallyWaitsToMinimizeStalling = true
+        #if DEBUG
+        // `-muted` at launch: try the app in the Simulator without it playing through the Mac's
+        // speakers. ShazamKit still hears the stream (it listens to it, not to the output).
+        if ProcessInfo.processInfo.arguments.contains("-muted") { player.volume = 0 }
+        #endif
         self.player = player
         observeTimeControl(of: player)
         player.play()
@@ -263,6 +332,11 @@ class RadioPlayer: NSObject, ObservableObject {
 
     func stop() {
         intendsToPlay = false
+        autoIdentifyTask?.cancel()
+        staleTitleTask?.cancel()
+        syncIdentifyTask?.cancel()
+        checkingStaleTitle = false
+        if ShazamService.shared.isListening { ShazamService.shared.stop() }
         cancelReconnect()
         teardownStream()
         isPlaying = false
@@ -347,7 +421,11 @@ class RadioPlayer: NSObject, ObservableObject {
     private func handleTimeControl(_ status: AVPlayer.TimeControlStatus) {
         switch status {
         case .playing:
-            if !hasPlayedSinceConnect { playbackLog.notice("playing — audio started") }
+            if !hasPlayedSinceConnect {
+                playbackLog.notice("playing — audio started")
+                // Give the station a moment to name the song before asking ShazamKit.
+                if !stationSendsTitles && lastSongKey == nil { scheduleAutoIdentify(in: 8) }
+            }
             isLoading = false
             isReconnecting = false
             reconnectAttempt = 0
@@ -670,7 +748,10 @@ class RadioPlayer: NSObject, ObservableObject {
         }
     }
 
-    private func handleMetadata(_ metadata: [AVMetadataItem]) async {
+    /// `sounding` is when the title's place in the audio is (or was) heard: the metadata group's
+    /// own timestamp against the item's clock, rather than the moment the callback happens to
+    /// run — the two can be seconds apart, and the lyrics count from this.
+    private func handleMetadata(_ metadata: [AVMetadataItem], sounding: Date) async {
         for item in metadata {
             guard let raw = try? await item.load(.value),
                   let title = (raw as? String) else { continue }
@@ -679,12 +760,17 @@ class RadioPlayer: NSObject, ObservableObject {
             // StreamTitle instead of the song. Ignore those so we neither show a meaningless
             // number nor clobber a title ShazamKit already found.
             guard Self.isMeaningfulTitle(cleaned) else { continue }
-            let parts = cleaned.split(separator: "-", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
+            // Split on " - " first: a bare "-" would cut band names like "M-Clan" in two.
+            let separator = cleaned.contains(" - ") ? " - " : "-"
+            let parts = cleaned.components(separatedBy: separator)
+            let pair = parts.count >= 2
+                ? [parts[0], parts.dropFirst().joined(separator: separator)].map { $0.trimmingCharacters(in: .whitespaces) }
+                : [cleaned]
             let track: String
             let artist: String?
-            if parts.count == 2 {
-                artist = parts[0]
-                track = parts[1]
+            if pair.count == 2, !pair[0].isEmpty, !pair[1].isEmpty {
+                artist = pair[0]
+                track = pair[1]
             } else {
                 track = cleaned
                 artist = nil
@@ -695,14 +781,46 @@ class RadioPlayer: NSObject, ObservableObject {
                 clearStreamMetadata()
                 return
             }
+            let key = "\(artist ?? "")|\(track)".lowercased()
+            // The title that outlived its song, sent again (a reconnect): ShazamKit carries on.
+            guard key != staleTitleKey else { return }
+            stationSendsTitles = true
+            autoIdentifyTask?.cancel()
+            guard key != lastSongKey else { return }
+            if staleTitleKey != nil {
+                staleTitleKey = nil
+                checkingStaleTitle = false
+                // The station catching up with the song ShazamKit already put on screen.
+                if trackIsFromShazam, let shown = currentTrack, Self.sameSong(shown, track) {
+                    trackIsFromShazam = false
+                    lastSongKey = key
+                    scheduleStaleTitleCheck()
+                    return
+                }
+            }
+            trackIsFromShazam = false
+            lastSongKey = key
+            songPlacedByShazam = false
+            if shazamSyncsLyrics { zeroLyricsOffset() }
+
+            // Stations change the title a little after the song really starts — crossfades,
+            // encoder delay — by an amount that belongs to the station, not to the connection.
+            // ShazamKit measures it (see `applyShazamMatch`) and it's taken off from then on.
+            titleChangeHeardAt = sawTitleSinceTuning ? sounding : nil
+            songStartedAt = sounding.addingTimeInterval(-titleLag)
+            songStartIsExact = sawTitleSinceTuning
+            sawTitleSinceTuning = true
+
             currentArtist = artist
             currentTrack = track
-            trackIsFromShazam = false
             currentAppleMusicURL = nil
-            updateNowPlayingInfo()
-            if let track = currentTrack {
-                resolveArtwork(track: track, artist: currentArtist, shazamURL: nil)
+            if let station = currentStation {
+                HistoryStore.shared.addFromICY(track: track, artist: artist, stationName: station.name)
             }
+            updateNowPlayingInfo()
+            resolveArtwork(track: track, artist: artist, shazamURL: nil)
+            resolveLyrics(key: key, track: track, artist: artist)
+            scheduleStaleTitleCheck()
             return
         }
     }
@@ -737,13 +855,352 @@ class RadioPlayer: NSObject, ObservableObject {
     /// button) to the station. A Shazam result outranks stream metadata, so it survives.
     private func clearStreamMetadata() {
         guard !trackIsFromShazam, currentTrack != nil else { return }
+        clearSong()
+        updateNowPlayingInfo()
+        setLockScreenToStationLogo(seedTrack: currentStation?.name ?? "")
+    }
+
+    /// Back to "no song": the station on screen, no lyrics.
+    private func clearSong() {
         currentTrack = nil
         currentArtist = nil
         currentArtworkURL = nil
         currentAppleMusicURL = nil
         lastArtworkKey = nil
+        trackIsFromShazam = false
+        lyrics = nil
+        lyricsPending = false
+        songStartedAt = nil
+        songStartIsExact = false
+        lastSongKey = nil
+        songPlacedByShazam = false
+        titleChangeHeardAt = nil
+        syncIdentifyTask?.cancel()
+        staleTitleTask?.cancel()
+    }
+
+    // MARK: - Lyrics timing
+
+    /// The clock the lyrics run on: the song's start, moved by the lead and the user's offset.
+    var lyricsStart: Date? {
+        songStartedAt?.addingTimeInterval(-(Self.lyricsLead + lyricsOffset))
+    }
+
+    /// Whether the lyrics can follow the song right now (and so be adjusted).
+    var lyricsAreSynced: Bool {
+        songStartIsExact && !(lyrics?.synced.isEmpty ?? true)
+    }
+
+    /// How long it takes to see the line being sung and tap it.
+    static let tapReaction: TimeInterval = 0.3
+
+    /// Moves the lyrics earlier (positive) or later (negative) for the current station.
+    func nudgeLyrics(by seconds: Double) {
+        guard let station = currentStation else { return }
+        lyricsOffset = min(15, max(-15, lyricsOffset + seconds))
+        UserDefaults.standard.set(lyricsOffset, forKey: "lyrics_offset." + station.streamURL)
+        publishWidgetState()
+    }
+
+    /// The user tapped the line being sung right now: the lyrics carry on from there.
+    ///
+    /// With the song's start already known, the correction is the station's — it changes titles
+    /// late — so it goes into the station's offset. Tuned in mid-song, it's the missing start.
+    func syncLyrics(toLine index: Int, tappedAt tap: Date = Date()) {
+        guard let station = currentStation, let lines = lyrics?.synced, lines.indices.contains(index) else { return }
+        let wanted = tap.addingTimeInterval(-lines[index].time - Self.tapReaction)
+        if songStartIsExact, let start = songStartedAt {
+            lyricsOffset = min(15, max(-15, start.timeIntervalSince(wanted) - Self.lyricsLead))
+            UserDefaults.standard.set(lyricsOffset, forKey: "lyrics_offset." + station.streamURL)
+        } else {
+            songStartedAt = wanted.addingTimeInterval(Self.lyricsLead + lyricsOffset)
+            songStartIsExact = true
+        }
+        publishWidgetState()
+    }
+
+    func resetLyricsOffset() {
+        zeroLyricsOffset()
+        publishWidgetState()
+    }
+
+    /// Back to ±0 without publishing: callers that move to a new song publish anyway.
+    private func zeroLyricsOffset() {
+        guard let station = currentStation else { return }
+        lyricsOffset = 0
+        UserDefaults.standard.removeObject(forKey: "lyrics_offset." + station.streamURL)
+    }
+
+    /// How many seconds after the real start of a song this station changes its title.
+    private var titleLag: Double {
+        guard let station = currentStation else { return 0 }
+        return UserDefaults.standard.double(forKey: "title_lag." + station.streamURL)
+    }
+
+    /// Averaged with what was known, so one odd measurement can't throw the lyrics off.
+    private func learnTitleLag(_ measured: Double) {
+        guard let station = currentStation else { return }
+        let key = "title_lag." + station.streamURL
+        let known = UserDefaults.standard.object(forKey: key) as? Double
+        let lag = known.map { ($0 + measured) / 2 } ?? measured
+        UserDefaults.standard.set(lag, forKey: key)
+        playbackLog.notice("\(station.name, privacy: .public) changes its titles \(measured, privacy: .public)s late (now using \(lag, privacy: .public)s)")
+    }
+
+    /// Seconds of audio downloaded but not yet played — how far the second connection that
+    /// ShazamKit may listen to runs ahead of what's heard.
+    private func bufferedAhead() -> Double {
+        guard let item = playerItem, let range = item.loadedTimeRanges.last?.timeRangeValue else { return 0 }
+        let ahead = max(0, (range.start + range.duration).seconds - item.currentTime().seconds)
+        playbackLog.notice("player is \(ahead, privacy: .public)s behind the air")
+        return ahead
+    }
+
+    // MARK: - Recognition on its own
+
+    private func setupShazam() {
+        let shazam = ShazamService.shared
+        shazam.onMatch = { [weak self] match, viaDecoder, automatic in
+            self?.applyShazamMatch(match, viaDecoder: viaDecoder, askedByUser: !automatic)
+        }
+        shazam.onNoMatch = { [weak self] in self?.handleNoMatch() }
+    }
+
+    private func setupForegroundHandling() {
+        foregroundTask = Task { @MainActor [weak self] in
+            for await _ in NotificationCenter.default.notifications(named: UIApplication.didBecomeActiveNotification) {
+                self?.catchUpOnReturn()
+            }
+        }
+    }
+
+    /// Back on screen: what couldn't be asked while the app was away.
+    private func catchUpOnReturn() {
+        // Still connecting: the first audio schedules what it needs (see `handleTimeControl`).
+        guard intendsToPlay, isPlaying, hasPlayedSinceConnect else { return }
+        if shazamNamesSongs {
+            if currentTrack == nil { scheduleAutoIdentify(in: 1) }
+        } else {
+            scheduleStaleTitleCheck()
+            scheduleLyricsSync()
+        }
+    }
+
+    /// Puts a ShazamKit result on screen, in the history and in the widget. Its offset is the
+    /// exact position in the song, so the lyrics follow along even on a station that never
+    /// says what it's playing. Audio decoded over the second connection runs ahead of what's
+    /// heard by what the player holds in its buffer, so that path corrects for it.
+    private func applyShazamMatch(_ match: ShazamMatch, viaDecoder: Bool, askedByUser: Bool) {
+        guard let station = currentStation, isPlaying else { return }
+        missedIdentifications = 0
+        // You asked what's on: the answer counts even over the station's title.
+        if askedByUser, stationSendsTitles, staleTitleKey == nil { checkingStaleTitle = true }
+        // On a station that names its songs, ShazamKit was only asked for the position in the
+        // song (`scheduleLyricsSync`) or whether the song is over (`scheduleStaleTitleCheck`).
+        // Take the offset if it heard the same song; the station's title stays — unless the
+        // song is over and the title stayed.
+        let stillOnStationSong = !trackIsFromShazam && currentTrack.map { Self.sameSong($0, match.title) } == true
+        if stationSendsTitles, staleTitleKey == nil, !(checkingStaleTitle && !stillOnStationSong) {
+            let wasChecking = checkingStaleTitle && !askedByUser
+            checkingStaleTitle = false
+            guard stillOnStationSong, let offset = match.offset else {
+                if wasChecking { scheduleStaleTitleCheck(after: 60) }
+                return
+            }
+            let start = match.matchedAt.addingTimeInterval(-offset + (viaDecoder ? bufferedAhead() : 0))
+            if let heard = titleChangeHeardAt {
+                let lag = heard.timeIntervalSince(start)
+                // A plausible lag only: a match on the previous song's tail would give nonsense.
+                if (-5...30).contains(lag) { learnTitleLag(lag) }
+            }
+            songStartedAt = start
+            songStartIsExact = true
+            songPlacedByShazam = true
+            shazamSyncsLyrics = true
+            zeroLyricsOffset()
+            playbackLog.notice("lyrics synced by ShazamKit at \(offset, privacy: .public)s")
+            // Still on it past its expected end (a longer version): look again in a minute.
+            scheduleStaleTitleCheck(after: wasChecking ? 60 : nil)
+            updateNowPlayingInfo()
+            return
+        }
+        if checkingStaleTitle {
+            // Another song on air while the station still names the last one.
+            checkingStaleTitle = false
+            staleTitleKey = lastSongKey
+            playbackLog.notice("station title is stale — ShazamKit names the songs until it changes")
+        }
+        let artist = match.artist.isEmpty ? nil : match.artist
+        let key = "\(artist ?? "")|\(match.title)".lowercased()
+        let isNewSong = key != lastSongKey
+        if isNewSong {
+            lastSongKey = key
+            trackIsFromShazam = true
+            songPlacedByShazam = false
+            titleChangeHeardAt = nil
+            currentTrack = match.title
+            currentArtist = artist
+            currentAppleMusicURL = match.appleMusicURL
+            HistoryStore.shared.addFromShazam(match, stationName: station.name)
+            resolveArtwork(track: match.title, artist: artist, shazamURL: match.artworkURL)
+            resolveLyrics(key: key, track: match.title, artist: artist)
+        }
+        if let offset = match.offset {
+            songStartedAt = match.matchedAt.addingTimeInterval(-offset + (viaDecoder ? bufferedAhead() : 0))
+            songStartIsExact = true
+            songPlacedByShazam = true
+            // Matched again every minute on the same song: only a new one starts from ±0.
+            if isNewSong || !shazamSyncsLyrics { zeroLyricsOffset() }
+            shazamSyncsLyrics = true
+        }
+        updateNowPlayingInfo()
+        // Check again in a while: the song will have changed, and the station won't say so.
+        if shazamNamesSongs { scheduleAutoIdentify(in: 60) }
+    }
+
+    /// Nothing recognised: talk, an ad, or a song ShazamKit doesn't know. One miss may be a
+    /// jingle over the end of the song; two in a row and the song on screen is surely over.
+    private func handleNoMatch() {
+        if checkingStaleTitle {
+            // Talk or ads under a title whose song is over: back to the station until
+            // ShazamKit hears a song or the station names one.
+            checkingStaleTitle = false
+            staleTitleKey = lastSongKey
+            playbackLog.notice("station title is stale and nothing recognised — showing the station")
+            showStation()
+            scheduleAutoIdentify(in: 45)
+            return
+        }
+        guard shazamNamesSongs else { return }
+        missedIdentifications += 1
+        if missedIdentifications >= 2, trackIsFromShazam { showStation() }
+        scheduleAutoIdentify(in: 45)
+    }
+
+    /// No song on screen: the station's name and logo, everywhere.
+    private func showStation() {
+        clearSong()
         updateNowPlayingInfo()
         setLockScreenToStationLogo(seedTrack: currentStation?.name ?? "")
+    }
+
+    private func scheduleAutoIdentify(in seconds: TimeInterval) {
+        autoIdentifyTask?.cancel()
+        guard shazamNamesSongs else { return }
+        autoIdentifyTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(seconds))
+            guard let self, !Task.isCancelled, self.intendsToPlay, self.isPlaying,
+                  self.shazamNamesSongs else { return }
+            guard self.mayIdentifyOnItsOwn else {
+                // Nobody checking while the app is away: a song ShazamKit named is likely over
+                // by now, so the station goes back up until the app returns.
+                if self.trackIsFromShazam { self.showStation() }
+                return
+            }
+            guard !ShazamService.shared.isListening else {
+                self.scheduleAutoIdentify(in: 15)
+                return
+            }
+            ShazamService.shared.identifyAutomatically()
+        }
+    }
+
+    /// Asks ShazamKit what's on air once the song on screen should be over: the station may
+    /// have stopped renaming its songs. With no `delay`, that's the song's length past its start.
+    private func scheduleStaleTitleCheck(after delay: TimeInterval? = nil) {
+        staleTitleTask?.cancel()
+        guard !shazamNamesSongs, let key = lastSongKey, let start = songStartedAt else { return }
+        let length = lyrics?.duration ?? Self.assumedSongLength
+        let wait = delay ?? start.addingTimeInterval(length + Self.staleTitleGrace).timeIntervalSinceNow
+        staleTitleTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(max(5, wait)))
+            guard let self, !Task.isCancelled, key == self.lastSongKey, self.isPlaying,
+                  !self.shazamNamesSongs, self.mayIdentifyOnItsOwn else { return }
+            // Busy with another identification: its result wouldn't say whether the song is over.
+            guard !ShazamService.shared.isListening else {
+                self.scheduleStaleTitleCheck(after: 15)
+                return
+            }
+            playbackLog.notice("title unchanged past the song's end — asking ShazamKit")
+            self.checkingStaleTitle = true
+            ShazamService.shared.identifyAutomatically()
+        }
+    }
+
+    /// Loose title comparison: "Miedo (Directo)" from the station is ShazamKit's "Miedo".
+    private static func sameSong(_ a: String, _ b: String) -> Bool {
+        let x = compact(a), y = compact(b)
+        return !x.isEmpty && !y.isEmpty && (x.contains(y) || y.contains(x))
+    }
+
+    // MARK: - Lyrics lookup
+
+    private func resolveLyrics(key: String, track: String, artist: String?) {
+        lyrics = nil
+        guard LyricsFeature.embedded else {
+            lyricsPending = false
+            return
+        }
+        if let cached = lyricsCache[key] {
+            finishLyrics(key: key, lyrics: cached)
+            return
+        }
+        lyricsPending = true
+        guard !lyricsLookupsInFlight.contains(key) else { return }
+        lyricsLookupsInFlight.insert(key)
+        Task { @MainActor [weak self] in
+            for wait in [3, 10, 0] {
+                let outcome = await LyricsService.lookup(track: track, artist: artist)
+                guard let self else { return }
+                switch outcome {
+                case .found(let found):
+                    self.rememberLyrics(found, for: key)
+                    self.finishLyrics(key: key, lyrics: found)
+                    return
+                case .notFound:
+                    self.rememberLyrics(nil, for: key)
+                    self.finishLyrics(key: key, lyrics: nil)
+                    return
+                case .failed:
+                    guard wait > 0, key == self.lastSongKey else {
+                        self.finishLyrics(key: key, lyrics: nil)
+                        return
+                    }
+                    try? await Task.sleep(for: .seconds(wait))
+                }
+            }
+        }
+    }
+
+    private func finishLyrics(key: String, lyrics found: SongLyrics?) {
+        lyricsLookupsInFlight.remove(key)
+        guard key == lastSongKey else { return }
+        lyrics = found
+        lyricsPending = false
+        publishWidgetState()
+        scheduleStaleTitleCheck()
+        scheduleLyricsSync()
+    }
+
+    /// ShazamKit says exactly where in the song we are: the only way to follow a song we tuned
+    /// into halfway, and the check on a station's late title changes. Asked ~20 s in, past the
+    /// crossfade, where it would still hear the previous song.
+    private func scheduleLyricsSync() {
+        syncIdentifyTask?.cancel()
+        guard lyrics?.synced.isEmpty == false, !shazamNamesSongs, !songPlacedByShazam, isPlaying,
+              let key = lastSongKey else { return }
+        let elapsed = songStartIsExact ? songStartedAt.map { Date().timeIntervalSince($0) } ?? 0 : 20
+        syncIdentifyTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(max(0, 20 - elapsed)))
+            guard let self, !Task.isCancelled, key == self.lastSongKey, self.isPlaying,
+                  self.mayIdentifyOnItsOwn else { return }
+            ShazamService.shared.identifyAutomatically()
+        }
+    }
+
+    private func rememberLyrics(_ lyrics: SongLyrics?, for key: String) {
+        if lyricsCache.count >= 60 { lyricsCache.removeAll() }
+        lyricsCache[key] = .some(lyrics)
     }
 
     private func setupAudioSession() {
@@ -911,21 +1368,16 @@ class RadioPlayer: NSObject, ObservableObject {
                 track: currentTrack,
                 artist: currentArtist,
                 logoURL: station.logoURL,
-                isPlaying: isPlaying
+                isPlaying: isPlaying,
+                coverURL: currentArtworkURL?.absoluteString,
+                lyrics: lyrics,
+                lyricsPending: lyricsPending,
+                songStartedAt: lyricsStart,
+                songStartIsExact: songStartIsExact
             ))
         } else {
             WidgetShared.saveNowPlaying(nil)
         }
-    }
-
-    /// Enriches the lock screen when ShazamKit identifies the current track.
-    func updateNowPlayingFromShazam(title: String, artist: String?, artworkURL: URL?, appleMusicURL: URL?) {
-        currentTrack = title
-        currentArtist = artist
-        trackIsFromShazam = true
-        currentAppleMusicURL = appleMusicURL
-        updateNowPlayingInfo()
-        resolveArtwork(track: title, artist: artist, shazamURL: artworkURL)
     }
 
     /// Single entry point for cover art, whatever the title's source. ShazamKit hands us an
@@ -1092,12 +1544,7 @@ class RadioPlayer: NSObject, ObservableObject {
     /// one. Real station metadata is left untouched.
     func prepareForReidentify() {
         guard trackIsFromShazam else { return }
-        currentTrack = nil
-        currentArtist = nil
-        currentArtworkURL = nil
-        currentAppleMusicURL = nil
-        lastArtworkKey = nil
-        trackIsFromShazam = false
+        clearSong()
         nowPlayingArtwork = nil
         updateNowPlayingInfo()
         if let station = currentStation {
@@ -1167,6 +1614,17 @@ extension RadioPlayer: @preconcurrency AVPlayerItemMetadataOutputPushDelegate {
                         didOutputTimedMetadataGroups groups: [AVTimedMetadataGroup],
                         from track: AVPlayerItemTrack?) {
         let items = groups.flatMap { $0.items }
-        Task { await handleMetadata(items) }
+        // Where in the item's timeline these titles sit, versus where playback is right now.
+        var sounding = Date()
+        if let start = groups.first?.timeRange.start, start.isNumeric,
+           let now = playerItem?.currentTime(), now.isNumeric {
+            let ahead = (start - now).seconds
+            // Guard against a bogus timestamp: a title can't sit minutes away from playback.
+            if abs(ahead) < 60 {
+                sounding = Date().addingTimeInterval(ahead)
+                playbackLog.notice("title timestamp is \(ahead, privacy: .public)s from playback")
+            }
+        }
+        Task { await handleMetadata(items, sounding: sounding) }
     }
 }

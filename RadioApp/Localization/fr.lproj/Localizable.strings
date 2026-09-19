@@ -72,7 +72,7 @@
 "widget_stations_title" = "Lancer une station";
 "widget_stations_desc" = "Vos stations en raccourcis : maintenez le widget appuyé pour choisir lesquelles.";
 "widget_now_playing_title" = "En écoute";
-"widget_now_playing_desc" = "Affiche la station et le morceau que vous écoutez. Touchez pour ouvrir l'app.";
+"widget_now_playing_desc" = "Affiche la station et la chanson que vous écoutez et, en grande taille, ses paroles. Touchez pour ouvrir l’app.";
 "widget_choose_station" = "Choisissez une station";
 "paused" = "En pause";
 
@@ -109,3 +109,19 @@
 /* Lyrics */
 "view_lyrics" = "Voir les paroles";
 "lyrics_unavailable" = "Paroles indisponibles";
+
+/* Lyrics */
+"lyrics_title" = "Paroles";
+"hide_lyrics" = "Voir la pochette";
+"lyrics_wait_title" = "Les paroles s’affichent dès que la chanson diffusée est connue.";
+"lyrics_instrumental" = "Instrumental ♪";
+"lyrics_hint_synced" = "Décalées ? Touchez la ligne chantée en ce moment.";
+"lyrics_hint_unplaced" = "On ne sait pas encore où en est la chanson : touchez la ligne chantée et les paroles suivront à partir de là.";
+"lyrics_hint_plain" = "Ces paroles n’ont pas de minutage, elles ne peuvent donc pas suivre la chanson.";
+"lyrics_searching" = "Recherche des paroles…";
+"lyrics_none" = "Pas de paroles pour cette chanson.";
+"lyrics_later" = "Retarder les paroles";
+"lyrics_earlier" = "Avancer les paroles";
+"lyrics_reset" = "Remettre les paroles à zéro";
+"lyrics_offset_a11y" = "Réglage des paroles : %@";
+"lyrics_line_hint" = "Synchronise les paroles à partir de cette ligne";

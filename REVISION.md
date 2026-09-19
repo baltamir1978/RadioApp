@@ -1,6 +1,6 @@
 # Revisión de código — RadioApp
 
-Estado del proyecto y trabajo pendiente. Actualizado el 18/09/2026.
+Estado del proyecto y trabajo pendiente. Actualizado el 19/09/2026.
 
 ## Resumen
 
@@ -10,7 +10,7 @@ App SwiftUI bien estructurada por responsabilidades (player, stores, servicios, 
 
 - Rama `main` → `origin` (`github.com/baltamir1978/RadioApp.git`), al día con el árbol de trabajo.
 - Primera versión etiquetada: **`v1.0`**, con release publicada en GitHub.
-- `MARKETING_VERSION` = `1.0` y `CURRENT_PROJECT_VERSION` = `1`. Este último hay que incrementarlo en cada envío a TestFlight, aunque la versión de cara al usuario no cambie.
+- `MARKETING_VERSION` = `1.2` y `CURRENT_PROJECT_VERSION` = `3` (subido el 19/09/2026 para el envío con la letra). Este último hay que incrementarlo en cada envío a TestFlight, aunque la versión de cara al usuario no cambie; está también en `Tools/add_widget_target.rb`, que lo aplica al widget.
 
 ## Resuelto desde la revisión anterior
 
@@ -27,6 +27,14 @@ App SwiftUI bien estructurada por responsabilidades (player, stores, servicios, 
   - `StreamSinkBox` pasa a `Sendable` con `OSAllocatedUnfairLock`, y los tres callbacks C de `StreamDecoder` dejan de necesitar `nonisolated(unsafe)`. Quedan dos `@unchecked Sendable`, justificados: `StreamMatcher` (guarda un `SHSession`, que no es `Sendable`) y `StreamDecoder` (estado C de AudioToolbox confinado a la cola de URLSession).
   - El delegado de metadatos ICY es ahora `@preconcurrency` y aislado en el actor principal, que es donde ya se entregaba (`queue: .main`).
 - ✅ **Cierre inmediato al elegir emisora** (18/09/2026): secuela de la migración a Swift 6. El `requestHandler` de `MPMediaItemArtwork` se construía dentro de un `MainActor.run`, así que heredaba el aislamiento del actor principal; pero `MPNowPlayingInfoCenter` lo llama desde su propia cola, y en Swift 6 el compilador mete ahí una comprobación de ejecutor que aborta el proceso (`BUG IN CLIENT OF LIBDISPATCH: Block was expected to execute on queue [com.apple.main-thread]`, `EXC_BREAKPOINT`). Como la carátula se carga nada más arrancar una emisora, la app se cerraba siempre. La carátula se construye ahora antes de volver al actor principal, en contexto no aislado. Comprobado en el simulador con iOS 26.5: cuatro emisoras encadenadas (Cassette FM, Kiss FM, Cadena 100, La Indie), audio en las cuatro y ningún informe de cierre.
+
+- ✅ **Letra sincronizada, portada de MacRadio** (19/09/2026). La app no es pública, así que la letra de LRCLIB va dentro (`LYRICS_EMBEDDED` activado en el target de la app). Lo que llegó con ella:
+  - `ShazamService` es ahora uno solo (`shared`) para la pantalla, CarPlay y el reproductor, que aplica los resultados (título, carátula, historial) y guarda la posición en la canción. El historial ya no se escribe desde las vistas, que duplicaban entradas en cuanto el reproductor ponía títulos.
+  - Inicio de canción por el cambio de título (marca de tiempo del bloque de metadatos, menos el retraso aprendido de la emisora) y por Shazam a los ~20 s; ajuste − / + / ↺ por emisora y toque en la línea que suena; títulos caducados y emisoras sin títulos nombrados por Shazam; búsqueda de letras de colaboraciones.
+  - `StreamDecoder` no pasa a Shazam la ráfaga inicial de audio atrasado (en MacRadio dejaba la letra ~1 s tarde).
+  - Las identificaciones automáticas solo con la app en pantalla (cada una abre una segunda conexión); al volver se ponen al día.
+  - Reproductor y letra lado a lado en pantallas anchas (plegable abierto, iPad), con la hoja a tamaño de página; en el iPhone, «Ver letra». Widget «Sonando ahora» en tamaño grande y extragrande con la letra por líneas; al tocarlo abre el reproductor (`radioapp://nowplaying`).
+  - Comprobado en el simulador (iPhone 18 Pro y iPad mini, iOS 27): Cadena 100 con Shazam por la segunda conexión (6 s de ráfaga descartados), letra sincronizada y dos columnas en el iPad. De paso: la etiqueta «EN DIRECTO» salía cortada («E…») y `Tools/add_widget_target.rb` seguía en Swift 5.0.
 
 ## Puntos fuertes
 
@@ -45,6 +53,7 @@ App SwiftUI bien estructurada por responsabilidades (player, stores, servicios, 
 
 ### Verificación en dispositivo
 Lo que el simulador no cubre y sólo se puede comprobar en el coche o en el iPhone:
+- **La letra en el iPhone** (build 3): que vaya a tiempo sin tocar − / +, «Ver letra» en el iPhone, el widget grande con la letra avanzando (no se ha podido ver en el simulador: no deja añadir widgets desde la línea de comandos) y que en CarPlay o con la app en segundo plano no se hagan identificaciones solas.
 - Kiss FM arrancando con 5G (su fallo dependía de la latencia de la red móvil).
 - Que la pantalla de bloqueo y CarPlay ya no repiten el nombre de la emisora entre canciones.
 - Reconocimiento con Shazam en CarPlay, widget y deep link `radioapp://`.

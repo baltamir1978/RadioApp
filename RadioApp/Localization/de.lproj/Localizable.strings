@@ -72,7 +72,7 @@
 "widget_stations_title" = "Sender starten";
 "widget_stations_desc" = "Deine Sender als Kurzbefehle: Halte das Widget gedrückt, um sie auszuwählen.";
 "widget_now_playing_title" = "Läuft gerade";
-"widget_now_playing_desc" = "Zeigt den Sender und den Song, den du hörst. Zum Öffnen der App tippen.";
+"widget_now_playing_desc" = "Zeigt den Sender und den Song, den du hörst, und in der großen Größe den Songtext. Tippe, um die App zu öffnen.";
 "widget_choose_station" = "Sender auswählen";
 "paused" = "Pausiert";
 
@@ -109,3 +109,19 @@
 /* Lyrics */
 "view_lyrics" = "Liedtext anzeigen";
 "lyrics_unavailable" = "Liedtext nicht verfügbar";
+
+/* Lyrics */
+"lyrics_title" = "Songtext";
+"hide_lyrics" = "Cover zeigen";
+"lyrics_wait_title" = "Der Songtext erscheint, sobald bekannt ist, welcher Song läuft.";
+"lyrics_instrumental" = "Instrumental ♪";
+"lyrics_hint_synced" = "Nicht synchron? Tippe auf die Zeile, die gerade gesungen wird.";
+"lyrics_hint_unplaced" = "Noch ist unklar, wo der Song steht: Tippe auf die Zeile, die gerade gesungen wird, dann läuft der Text ab dort mit.";
+"lyrics_hint_plain" = "Dieser Songtext hat keine Zeitmarken und kann dem Song daher nicht folgen.";
+"lyrics_searching" = "Songtext wird gesucht …";
+"lyrics_none" = "Kein Songtext für diesen Song.";
+"lyrics_later" = "Songtext später";
+"lyrics_earlier" = "Songtext früher";
+"lyrics_reset" = "Songtext-Versatz zurücksetzen";
+"lyrics_offset_a11y" = "Songtext-Versatz: %@";
+"lyrics_line_hint" = "Synchronisiert den Songtext ab dieser Zeile";

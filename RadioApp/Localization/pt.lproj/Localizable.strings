@@ -72,7 +72,7 @@
 "widget_stations_title" = "Iniciar estação";
 "widget_stations_desc" = "As suas estações em atalhos: mantenha o widget premido para escolher quais.";
 "widget_now_playing_title" = "A tocar agora";
-"widget_now_playing_desc" = "Mostra a estação e a música que está a ouvir. Toque para abrir a app.";
+"widget_now_playing_desc" = "Mostra a estação e a música que está a ouvir e, no tamanho grande, a letra. Toque para abrir a app.";
 "widget_choose_station" = "Escolha uma estação";
 "paused" = "Em pausa";
 
@@ -109,3 +109,19 @@
 /* Lyrics */
 "view_lyrics" = "Ver letra";
 "lyrics_unavailable" = "Letra indisponível";
+
+/* Lyrics */
+"lyrics_title" = "Letra";
+"hide_lyrics" = "Ver capa";
+"lyrics_wait_title" = "A letra aparece quando se sabe que música está a tocar.";
+"lyrics_instrumental" = "Instrumental ♪";
+"lyrics_hint_synced" = "Está desfasada? Toque na linha que está a ser cantada.";
+"lyrics_hint_unplaced" = "Ainda não se sabe em que ponto vai a música: toque na linha que está a ser cantada e a letra segue a partir daí.";
+"lyrics_hint_plain" = "Esta letra não tem tempos, por isso não pode acompanhar a música.";
+"lyrics_searching" = "A procurar a letra…";
+"lyrics_none" = "Não há letra para esta música.";
+"lyrics_later" = "Atrasar a letra";
+"lyrics_earlier" = "Adiantar a letra";
+"lyrics_reset" = "Repor a letra a zero";
+"lyrics_offset_a11y" = "Ajuste da letra: %@";
+"lyrics_line_hint" = "Sincroniza a letra a partir desta linha";

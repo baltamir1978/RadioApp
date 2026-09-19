@@ -26,12 +26,6 @@ struct ContentView: View {
             .background(Color.appBackground.ignoresSafeArea())
         }
         .tint(.brand)
-        // Auto-save the live (ICY) track to history whenever it changes.
-        .onChange(of: player.currentTrack) { _, track in
-            if let track, let station = player.currentStation {
-                HistoryStore.shared.addFromICY(track: track, artist: player.currentArtist, stationName: station.name)
-            }
-        }
         .sheet(isPresented: $showSearch) {
             StationSearchView()
                 .environmentObject(store)

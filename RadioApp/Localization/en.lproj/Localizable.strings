@@ -72,7 +72,7 @@
 "widget_stations_title" = "Launch a station";
 "widget_stations_desc" = "Your stations as shortcuts: touch and hold the widget to choose which ones.";
 "widget_now_playing_title" = "Now playing";
-"widget_now_playing_desc" = "Shows the station and song you're listening to. Tap it to open the app.";
+"widget_now_playing_desc" = "Shows the station and the song you’re listening to and, in the large size, its lyrics. Tap to open the app.";
 "widget_choose_station" = "Choose a station";
 "paused" = "Paused";
 
@@ -109,3 +109,19 @@
 /* Lyrics */
 "view_lyrics" = "View lyrics";
 "lyrics_unavailable" = "Lyrics unavailable";
+
+/* Lyrics */
+"lyrics_title" = "Lyrics";
+"hide_lyrics" = "Show artwork";
+"lyrics_wait_title" = "The lyrics appear once the song on air is known.";
+"lyrics_instrumental" = "Instrumental ♪";
+"lyrics_hint_synced" = "Out of step? Tap the line being sung.";
+"lyrics_hint_unplaced" = "Where the song is isn’t known yet: tap the line being sung and the lyrics will follow from there.";
+"lyrics_hint_plain" = "These lyrics have no timings, so they can’t follow the song.";
+"lyrics_searching" = "Looking for the lyrics…";
+"lyrics_none" = "No lyrics for this song.";
+"lyrics_later" = "Move the lyrics later";
+"lyrics_earlier" = "Move the lyrics earlier";
+"lyrics_reset" = "Reset the lyrics timing";
+"lyrics_offset_a11y" = "Lyrics timing: %@";
+"lyrics_line_hint" = "Syncs the lyrics from this line";

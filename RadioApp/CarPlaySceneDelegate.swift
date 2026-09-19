@@ -117,7 +117,8 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
             .sink { [weak self] _ in self?.updateNowPlayingButtons() }
             .store(in: &cancellables)
 
-        // Persist + surface a Shazam match identified from CarPlay.
+        // The player has already put the song on screen and in the history (see
+        // `RadioPlayer.applyShazamMatch`); only the favourite button needs refreshing.
         bridge.shazam.$match
             .compactMap { $0 }
             .receive(on: RunLoop.main)
@@ -127,11 +128,6 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
 
     @MainActor
     private func handleShazamMatch(_ match: ShazamMatch) {
-        let player = CarPlayBridge.shared.player
-        player.updateNowPlayingFromShazam(title: match.title, artist: match.artist, artworkURL: match.artworkURL, appleMusicURL: match.appleMusicURL)
-        if let station = player.currentStation {
-            HistoryStore.shared.addFromShazam(match, stationName: station.name)
-        }
         updateNowPlayingButtons()
     }
 }

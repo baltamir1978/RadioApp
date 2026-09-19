@@ -76,7 +76,7 @@
 "widget_stations_title" = "Lanzar emisora";
 "widget_stations_desc" = "Tus emisoras en accesos directos: mantén pulsado el widget para elegir cuáles.";
 "widget_now_playing_title" = "Sonando ahora";
-"widget_now_playing_desc" = "Muestra la emisora y la canción que estás escuchando. Tócalo para abrir la app.";
+"widget_now_playing_desc" = "Muestra la emisora y la canción que estás escuchando y, en tamaño grande, su letra. Tócalo para abrir la app.";
 "widget_choose_station" = "Elige una emisora";
 "paused" = "En pausa";
 
@@ -109,3 +109,19 @@
 "a11y_station_added" = "Ya está en mis emisoras";
 "a11y_buffer_value" = "%d segundos";
 "a11y_buffer_hint" = "Ajusta cuántos segundos de audio se cargan por adelantado";
+
+/* Lyrics */
+"lyrics_title" = "Letra";
+"hide_lyrics" = "Ver carátula";
+"lyrics_wait_title" = "La letra aparece cuando se sabe qué canción suena.";
+"lyrics_instrumental" = "Instrumental ♪";
+"lyrics_hint_synced" = "¿Va desfasada? Toca la línea que está sonando.";
+"lyrics_hint_unplaced" = "No se sabe por dónde va la canción: toca la línea que está sonando y la letra seguirá desde ahí.";
+"lyrics_hint_plain" = "Esta letra no trae tiempos, así que no puede seguir la canción.";
+"lyrics_searching" = "Buscando la letra…";
+"lyrics_none" = "No hay letra para esta canción.";
+"lyrics_later" = "Retrasar la letra";
+"lyrics_earlier" = "Adelantar la letra";
+"lyrics_reset" = "Poner la letra a cero";
+"lyrics_offset_a11y" = "Ajuste de la letra: %@";
+"lyrics_line_hint" = "Sincroniza la letra desde esta línea";

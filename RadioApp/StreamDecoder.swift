@@ -1,6 +1,7 @@
 import Foundation
 import AudioToolbox
 import AVFoundation
+import os
 
 /// Independently fetches a radio stream over its own HTTP connection, decodes the compressed
 /// audio (MP3 / AAC) to PCM, and hands the PCM to a callback — without AVPlayer and regardless
@@ -45,6 +46,19 @@ nonisolated final class StreamDecoder: NSObject, URLSessionDataDelegate, @unchec
     private var consumed = 0
     private var dataBase: UnsafeRawPointer?     // valid only inside `drain`
     private var scratch: [AudioStreamPacketDescription] = []
+
+    // Servers open with a burst of seconds-old audio (Cadena 100: 5.2 s within half a second)
+    // before settling into real time. ShazamKit takes streamed audio as being heard as it
+    // arrives, so the burst would place the song seconds behind the air: it's decoded but not
+    // passed on. Audio is ahead of the clock by `ahead`; while that keeps growing, the burst
+    // is still coming.
+    private var firstAudioAt: Date?
+    private var decodedSeconds: Double = 0
+    private var peakAhead: Double = 0
+    private var burstGrewAt = Date.distantPast
+    private let skippedLock = OSAllocatedUnfairLock(initialState: 0.0)
+    /// Seconds of burst audio held back from the handler, for the logs.
+    var skippedBurst: Double { skippedLock.withLock { $0 } }
 
     init(url: URL, handler: @escaping PCMHandler) {
         self.url = url
@@ -175,11 +189,32 @@ nonisolated final class StreamDecoder: NSObject, URLSessionDataDelegate, @unchec
                                                             &io, pcm.mutableAudioBufferList, nil)
                 if io > 0 {
                     pcm.frameLength = io
-                    handler(pcm)
+                    let seconds = Double(io) / outFmt.sampleRate
+                    if isRealTime(adding: seconds) {
+                        handler(pcm)
+                    } else {
+                        skippedLock.withLock { $0 += seconds }
+                    }
                 }
                 if status != noErr || io == 0 || consumed == before { break }
             }
         }
+    }
+
+    /// Whether audio decoded now arrives at the pace it's played (see `peakAhead`), rather than
+    /// in the opening burst. Network jitter makes the lead dip and recover; only new growth
+    /// beyond the peak counts as burst.
+    private func isRealTime(adding seconds: Double) -> Bool {
+        let now = Date()
+        let start = firstAudioAt ?? now
+        firstAudioAt = start
+        decodedSeconds += seconds
+        let ahead = decodedSeconds - now.timeIntervalSince(start)
+        if ahead > peakAhead + 0.1 {
+            peakAhead = ahead
+            burstGrewAt = now
+        }
+        return now.timeIntervalSince(burstGrewAt) > 0.5
     }
 
     fileprivate func provideInput(_ ioNumberDataPackets: UnsafeMutablePointer<UInt32>,

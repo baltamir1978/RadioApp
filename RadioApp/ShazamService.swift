@@ -2,12 +2,18 @@ import Foundation
 import Combine
 import ShazamKit
 import AVFoundation
+import os
+
+private nonisolated let shazamLog = Logger(subsystem: "com.radioapp.playback", category: "shazam")
 
 struct ShazamMatch {
     let title: String
     let artist: String
     let artworkURL: URL?
     let appleMusicURL: URL?
+    /// How far into the song the audio heard was, at `matchedAt` — what places the lyrics.
+    var offset: TimeInterval? = nil
+    var matchedAt = Date()
 }
 
 /// Feeds the live stream's decoded PCM straight to a ShazamKit session.
@@ -51,14 +57,27 @@ nonisolated final class StreamMatcher: @unchecked Sendable {
 /// headphones — anywhere the microphone has no acoustic path.
 ///
 /// Fallback: the microphone, used when nothing is streaming (identify ambient audio).
+///
+/// One instance for the whole app (`shared`): the Now Playing screen, CarPlay and the player
+/// all use it, the player to place the lyrics in the song and to name the songs of stations
+/// that don't (see `RadioPlayer.applyShazamMatch`).
 @MainActor
-class ShazamService: NSObject, ObservableObject, SHSessionDelegate {
+final class ShazamService: NSObject, ObservableObject, SHSessionDelegate {
+    static let shared = ShazamService()
+
     @Published var isListening = false
+    /// The last result of an identification the user asked for, for the result card.
     @Published var match: ShazamMatch?
     @Published var errorMessage: String?
 
+    /// Where every stream result goes (the player), whoever asked. Set once at start-up.
+    var onMatch: ((ShazamMatch, _ viaDecoder: Bool, _ automatic: Bool) -> Void)?
+    var onNoMatch: (() -> Void)?
+    /// Asked by the player rather than the user: no card, no "not found" notice, no microphone.
+    private var isAutomatic = false
+
     private let listenWindow: TimeInterval = 12
-    /// How long a recognized song stays on screen before we clear it back to the station.
+    /// How long the result card of an identification you asked for stays up.
     private let resultDisplayWindow: TimeInterval = 60
     /// Below this many tapped buffers over a full listen window, the passive stream tap is
     /// considered to have failed to capture audio (vs. a genuine "song not found").
@@ -80,12 +99,24 @@ class ShazamService: NSObject, ObservableObject, SHSessionDelegate {
         match = nil
         errorMessage = nil
         isListening = true
+        isAutomatic = false
 
         if RadioPlayer.shared.isPlaying {
             startStreamTapMode()
         } else {
             startMicMode()
         }
+    }
+
+    /// Identification the player starts on its own: to place the lyrics, or to name a song the
+    /// station doesn't. Only over the stream, and never over one already running.
+    func identifyAutomatically() {
+        guard !isListening, RadioPlayer.shared.isPlaying else { return }
+        errorMessage = nil
+        isListening = true
+        isAutomatic = true
+        shazamLog.notice("identifying automatically")
+        startStreamTapMode()
     }
 
     func stop() {
@@ -139,11 +170,19 @@ class ShazamService: NSObject, ObservableObject, SHSessionDelegate {
         matcher = nil
 
         if delivered < Self.minTapBuffers {
+            shazamLog.notice("tap starved (\(delivered, privacy: .public) buffers) — decoding a second connection")
             startRemoteDecoderMode()
         } else {
-            errorMessage = NSLocalizedString("no_match_found", comment: "")
-            stop()
+            noMatch()
         }
+    }
+
+    /// Nothing recognised in the stream: talk, an ad, or a song ShazamKit doesn't know.
+    private func noMatch() {
+        shazamLog.notice("no match")
+        if !isAutomatic { errorMessage = NSLocalizedString("no_match_found", comment: "") }
+        stop()
+        onNoMatch?()
     }
 
     // MARK: - Remote-decoder path (route-independent)
@@ -151,8 +190,7 @@ class ShazamService: NSObject, ObservableObject, SHSessionDelegate {
     private func startRemoteDecoderMode() {
         guard let urlString = RadioPlayer.shared.currentStation?.streamURL,
               let url = URL(string: urlString) else {
-            errorMessage = NSLocalizedString("no_match_found", comment: "")
-            stop()
+            noMatch()
             return
         }
         let matcher = StreamMatcher(delegate: self)
@@ -165,8 +203,7 @@ class ShazamService: NSObject, ObservableObject, SHSessionDelegate {
         identifyTimer = Timer.scheduledTimer(withTimeInterval: listenWindow + 4, repeats: false) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self, self.isListening else { return }
-                self.errorMessage = NSLocalizedString("no_match_found", comment: "")
-                self.stop()
+                self.noMatch()
             }
         }
     }
@@ -258,26 +295,35 @@ class ShazamService: NSObject, ObservableObject, SHSessionDelegate {
             title: item.title ?? "",
             artist: item.artist ?? "",
             artworkURL: item.artworkURL,
-            appleMusicURL: item.appleMusicURL
+            appleMusicURL: item.appleMusicURL,
+            offset: item.predictedCurrentMatchOffset,
+            matchedAt: Date()
         )
         Task { @MainActor in
-            guard self.isListening else { return }
-            self.match = result
+            guard self.isListening, !result.title.isEmpty else { return }
+            let viaDecoder = self.usingRemoteDecoder
+            let fromStream = self.usingStreamTap || viaDecoder
+            let automatic = self.isAutomatic
+            shazamLog.notice("match: \(result.title, privacy: .public) at \(result.offset ?? -1, privacy: .public)s")
+            if let decoder = self.remoteDecoder {
+                shazamLog.notice("second connection: \(decoder.skippedBurst, privacy: .public)s of opening burst held back")
+            }
             self.stop()
-            self.scheduleResultClear()
+            if !automatic {
+                self.match = result
+                self.scheduleResultClear()
+            }
+            // The microphone hears the room, not necessarily the station: it names nothing on air.
+            if fromStream { self.onMatch?(result, viaDecoder, automatic) }
         }
     }
 
-    /// Auto-clears a recognized song after `resultDisplayWindow` so a stale title/artwork
-    /// doesn't linger once the track has likely changed. Re-running identify cancels it.
+    /// Takes the result card away after `resultDisplayWindow`. The song itself stays on screen:
+    /// the player decides when it's over (see `RadioPlayer.applyShazamMatch`).
     private func scheduleResultClear() {
         displayTimer?.invalidate()
         displayTimer = Timer.scheduledTimer(withTimeInterval: resultDisplayWindow, repeats: false) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                self.match = nil
-                RadioPlayer.shared.prepareForReidentify()
-            }
+            Task { @MainActor [weak self] in self?.match = nil }
         }
     }
 

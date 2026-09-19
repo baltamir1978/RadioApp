@@ -58,13 +58,13 @@ widget.build_configurations.each do |config|
   bs['CODE_SIGN_STYLE'] = 'Automatic'
   bs['DEVELOPMENT_TEAM'] = 'JKMR84FU58'
   bs['IPHONEOS_DEPLOYMENT_TARGET'] = '26.5'
-  bs['SWIFT_VERSION'] = '5.0'
+  bs['SWIFT_VERSION'] = '6.0'
   bs['TARGETED_DEVICE_FAMILY'] = '1,2'
   bs['SKIP_INSTALL'] = 'YES'
   bs['SWIFT_EMIT_LOC_STRINGS'] = 'YES'
   # Must match the app target's values — App Store Connect rejects a mismatch.
   bs['MARKETING_VERSION'] = '1.2'
-  bs['CURRENT_PROJECT_VERSION'] = '2'
+  bs['CURRENT_PROJECT_VERSION'] = '3'
   bs['LD_RUNPATH_SEARCH_PATHS'] = ['$(inherited)', '@executable_path/Frameworks', '@executable_path/../../Frameworks']
 end
 

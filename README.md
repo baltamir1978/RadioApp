@@ -11,11 +11,12 @@ App de iOS para escuchar radio por internet con reconocimiento de canciones (Sha
 - ➕ **Emisoras propias**: añadir, editar y eliminar estaciones con URL de stream y logo.
 - 🎼 **Reconocimiento de canciones** con [ShazamKit](https://developer.apple.com/shazamkit/), capturando el audio del stream en directo (`AudioStreamTap`) o descodificándolo por separado (`StreamDecoder`) en las emisoras que no admiten la captura pasiva.
 - 🖼️ **Carátulas**: portada del tema en la pantalla de reproducción y en el historial, vía ShazamKit o búsqueda en la API de iTunes para las emisoras que sólo emiten texto, con caché por canción y reintentos cuando falla la red.
-- 📝 **Letras**: enlace directo a la canción en Apple Music.
+- 📝 **Letra sincronizada** ([LRCLIB](https://lrclib.net)) que sigue la canción línea a línea: la línea que suena se resalta y se mantiene a la vista; tocarla sincroniza la letra, y − / + / ↺ la ajustan por emisora. Como en MacRadio, el inicio de la canción sale del cambio de título (descontando lo tarde que lo cambia cada emisora) o de Shazam, y cuando una emisora deja un título ya acabado, Shazam dice qué suena. Ver «Letra».
+- 📐 **Pantallas anchas** (iPhone plegable abierto, iPad): reproductor y letra lado a lado. En el iPhone, «Ver letra» cambia la carátula por la letra.
 - 🔄 **Resistencia a cortes de red**: reconexión automática de streams caídos (pensada para 5G en movimiento) y un proxy local (`LocalStreamProxy`) que rescata emisoras cuyo servidor describe mal el stream.
 - 🎧 **Cuidado con la ruta de audio**: si el equipo del coche o los auriculares desaparecen, la app calla en vez de seguir sonando por el altavoz del móvil; y una pausa que el usuario no ha pedido (una llamada, Siri) se recupera sola.
 - 🕑 **Historial** de canciones escuchadas, con favoritos y una lista de títulos ignorados que mantiene fuera los eslóganes de la emisora.
-- 📱 **Widgets** (WidgetKit): emisora en reproducción y acceso rápido a emisoras. El de accesos directos es **configurable**: mantén pulsado el widget → *Editar* y elige qué emisora va en cada uno de los cuatro huecos.
+- 📱 **Widgets** (WidgetKit): emisora en reproducción —en tamaño grande y extragrande, con la carátula y la letra avanzando línea a línea; al tocarlo se abre el reproductor— y acceso rápido a emisoras. El de accesos directos es **configurable**: mantén pulsado el widget → *Editar* y elige qué emisora va en cada uno de los cuatro huecos.
 - 🚗 **CarPlay** mediante `CarPlaySceneDelegate`, con panel en el salpicadero (`CarPlayDashboardSceneDelegate`).
 - 🗣️ **Atajos de Siri** (`SiriIntents`).
 - 🌗 **Modo claro y oscuro** con colores adaptativos.
@@ -43,7 +44,8 @@ RadioApp/
 │   ├── RadioBrowserService.swift  # Cliente de la API Radio Browser
 │   ├── Station.swift / StationsStore.swift  # Modelo y persistencia de emisoras
 │   ├── HistoryStore.swift / ListenedSong.swift  # Historial de canciones
-│   ├── Lyrics.swift           # Acceso a la letra (enlace a Apple Music)
+│   ├── Lyrics.swift           # Panel de letra sincronizada (o enlace a Apple Music)
+│   ├── LyricsService.swift    # Búsqueda en LRCLIB (colaboraciones incluidas)
 │   ├── Theme.swift            # Colores adaptativos (claro / oscuro)
 │   ├── CarPlay*.swift         # Integración CarPlay (lista + salpicadero)
 │   ├── SiriIntents.swift      # Atajos de Siri
@@ -99,26 +101,67 @@ Criterios que conviene no romper al tocar la interfaz:
 1. Clona el repositorio y abre `RadioApp.xcodeproj` en Xcode.
 2. Selecciona tu **Team** de firma en *Signing & Capabilities* para los targets `RadioApp` y `RadioWidget`.
 3. Asegúrate de que están activadas las *capabilities*: **Background Modes → Audio**, **App Groups** (compartido con el widget) y **SiriKit**.
-4. Compila y ejecuta en un dispositivo real (ShazamKit y CarPlay no funcionan en simulador).
+4. Compila y ejecuta. CarPlay y el micrófono necesitan un dispositivo real; Shazam sobre el
+   stream y la letra sincronizada sí funcionan en el simulador (ver «Deep links»).
 
 > Consulta también `SETUP_XCODE.md` para los pasos detallados de configuración del proyecto en Xcode.
 
+## Letra
+
+La letra (LRCLIB, gratuita y sin clave) se muestra dentro de la app porque RadioApp no es
+pública: se instala desde Xcode o TestFlight. Mostrar letras en una app de la App Store exige
+licencia, así que todo va tras la condición de compilación `LYRICS_EMBEDDED`, activada en el
+target de la app; sin ella queda el enlace a Apple Music y ni una línea del código de letras.
+
+Las marcas de LRCLIB cuentan desde el inicio de la canción, y la emisora solo dice *qué* suena.
+El inicio se da por bueno si viene de:
+
+1. **Ver cambiar el título mientras se escucha**, con la marca de tiempo del bloque de metadatos
+   dentro del audio, menos lo tarde que esa emisora cambia sus títulos (`title_lag.<stream>`,
+   aprendido con Shazam y promediado).
+2. **Shazam** (`predictedCurrentMatchOffset`), a los ~20 s de cada canción con letra
+   sincronizada. Escucha por una segunda conexión (`StreamDecoder`), que abre con una ráfaga de
+   audio atrasado (Cadena 100: 6 s); esa ráfaga no se le pasa, y a su posición se le suma lo
+   que el reproductor tiene en el búfer.
+
+Encima, la letra se adelanta 1 s (se lee justo antes de cantarse) y se ajusta a mano por emisora.
+Si la duración de la canción pasa (+20 s) y el título no cambia, Shazam dice qué suena y nombra
+las canciones hasta que la emisora cambie el título; si no reconoce nada, se vuelve al logo. En
+las emisoras sin títulos (Kiss FM), Shazam identifica cada minuto.
+
+**Solo con la app en pantalla.** Cada identificación abre una segunda conexión al stream, así
+que las automáticas (sincronizar, títulos caducados, emisoras sin títulos) solo se hacen con la
+app delante, que es cuando se lee la letra; al volver a ella se ponen al día. En segundo plano o
+en CarPlay no gastan datos, y una canción que nombró Shazam vuelve a la emisora al minuto.
+
+**CarPlay no muestra la letra**: las apps de audio solo pueden usar las plantillas de Apple
+(listas, cuadrícula, «Ahora suena»), ninguna admite texto largo, y no hay acceso a las pantallas
+de los pasajeros. Para ellos está la app en el iPhone.
+
 ## Deep links
 
-El widget abre la app con:
+Los widgets abren la app con:
 
 ```
-radioapp://play?u=<URL_del_stream>
+radioapp://play?u=<URL_del_stream>   # empieza esa emisora
+radioapp://nowplaying                # abre el reproductor (con la letra) de lo que suena
 ```
 
-`RadioAppApp.handleURL` busca la emisora con ese stream y comienza la reproducción.
+`RadioAppApp.handleURL` los atiende. En compilaciones de depuración, `-open <enlace>` al
+arrancar hace lo mismo (en el simulador, `simctl openurl` pide confirmación en pantalla) y
+`-muted` deja el reproductor sin volumen para probar sin que suene por el Mac:
+
+```
+xcrun simctl launch <udid> Altamirano.RadioApp -muted -open "radioapp://play?u=<stream>" -open radioapp://nowplaying
+```
 
 ## Diagnóstico de reproducción
 
 Cuando una emisora no arranca o se corta, el síntoma visible es siempre el mismo (el botón alterna entre play y pausa sin sonido), así que la reproducción emite trazas con `os.Logger` bajo el subsistema `com.radioapp.playback`:
 
 - En dispositivo: **Console.app**, filtrando por ese subsistema.
-- En simulador: `xcrun simctl spawn <udid> log stream --level debug --predicate 'subsystem == "com.radioapp.playback"'`.
+- En simulador: `xcrun simctl spawn <udid> log show --last 5m --style compact | grep com.radioapp.playback`
+  (con Xcode 27, `--predicate` dentro del simulador no devuelve nada; filtrar con `grep` sí).
 
 Las trazas distinguen las causas que producen ese mismo síntoma:
 
@@ -130,6 +173,14 @@ Las trazas distinguen las causas que producen ese mismo síntoma:
 | `output device went away` | Se perdió el coche o los auriculares: se pausa a propósito, no se reintenta. |
 | `skipping reconnect — output fell back to the built-in speaker` | Se ha evitado que la radio vuelva a sonar por el altavoz del móvil. |
 | `cover lookup failed … retrying` | La búsqueda de carátula en iTunes falló por red; se reintenta. |
+| `title timestamp is …s from playback` | Distancia entre el título en el audio y lo que suena. |
+| `identifying automatically` | Shazam, pedido por la app (sincronizar letra, título caducado, emisora sin títulos). |
+| `second connection: …s of opening burst held back` | Audio atrasado de la ráfaga inicial que no se pasa a Shazam. |
+| `player is …s behind the air` | Lo que el reproductor tiene en el búfer, sumado a la posición de Shazam. |
+| `lyrics synced by ShazamKit at …s` | Shazam ha fijado la posición exacta de la canción. |
+| `… changes its titles …s late` | Retraso medido entre el inicio real de la canción y su título. |
+| `title unchanged past the song's end` | La canción debería haber acabado y el título sigue: se pregunta a Shazam. |
+| `station title is stale — …` | Suena otra cosa: Shazam nombra las canciones hasta el próximo título. |
 
 ## Audio en el coche
 
@@ -156,7 +207,7 @@ en marcha y ninguna se reproduce en el simulador:
 La app **no recoge datos**: no hay backend propio, ni analítica, ni SDK de terceros (solo
 frameworks de Apple). Las emisoras, el historial y la lista de ignorados se guardan en el
 dispositivo. El tráfico de red se limita al stream y la carátula que pide el usuario, más las
-consultas a Radio Browser e iTunes Search, sin identificador ni cuenta asociada.
+consultas a Radio Browser, iTunes Search y LRCLIB (letras), sin identificador ni cuenta asociada.
 
 - `PrivacyInfo.xcprivacy` (uno por bundle: app y widget — Apple evalúa cada uno por separado).
   Declara `NSPrivacyTracking = false`, sin dominios de seguimiento, sin datos recogidos, y una
