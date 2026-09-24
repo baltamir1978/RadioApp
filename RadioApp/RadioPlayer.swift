@@ -755,7 +755,7 @@ class RadioPlayer: NSObject, ObservableObject {
         for item in metadata {
             guard let raw = try? await item.load(.value),
                   let title = (raw as? String) else { continue }
-            let cleaned = title.trimmingCharacters(in: .whitespacesAndNewlines)
+            let cleaned = Self.repairingLatin1(title).trimmingCharacters(in: .whitespacesAndNewlines)
             // Some stations (e.g. Los 40 Classic) broadcast a bare numeric rotation code in
             // StreamTitle instead of the song. Ignore those so we neither show a meaningless
             // number nor clobber a title ShazamKit already found.
@@ -842,6 +842,18 @@ class RadioPlayer: NSObject, ObservableObject {
         let stationKey = compact(station)
         guard !stationKey.isEmpty else { return false }
         return [track, artist].compactMap { $0 }.contains { compact($0) == stationKey }
+    }
+
+    /// A station sending Latin-1 ("El Último" with a lone 0xDA byte) can have its title guessed
+    /// as Windows-1256 by AVFoundation, which turns "Ú" into "ع". Arabic in a title is taken for
+    /// that mistake: back to the original bytes and read them as Windows-1252.
+    static func repairingLatin1(_ title: String) -> String {
+        guard title.unicodeScalars.contains(where: { (0x0600...0x06FF).contains($0.value) }) else { return title }
+        let arabic = String.Encoding(rawValue: CFStringConvertEncodingToNSStringEncoding(
+            CFStringEncoding(CFStringEncodings.windowsArabic.rawValue)))
+        guard let bytes = title.data(using: arabic),
+              let latin = String(data: bytes, encoding: .windowsCP1252) else { return title }
+        return latin
     }
 
     /// Case-, accent- and separator-insensitive form, so "CADENA 100" matches "Cadena 100".
@@ -1149,7 +1161,8 @@ class RadioPlayer: NSObject, ObservableObject {
         guard !lyricsLookupsInFlight.contains(key) else { return }
         lyricsLookupsInFlight.insert(key)
         Task { @MainActor [weak self] in
-            for wait in [3, 10, 0] {
+            // LRCLIB answers 503 for a while when it's overloaded: keep trying through the song.
+            for wait in [3, 10, 30, 60, 90, 0] {
                 let outcome = await LyricsService.lookup(track: track, artist: artist)
                 guard let self else { return }
                 switch outcome {
