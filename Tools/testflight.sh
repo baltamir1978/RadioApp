@@ -44,6 +44,10 @@ KEY_PATH="${ASC_KEY_PATH:-$HOME/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_
 KEY_PATH="${KEY_PATH/#\~/$HOME}"
 [ -f "$KEY_PATH" ] || fail "No encuentro la clave .p8 en $KEY_PATH."
 
+[ -f Local.xcconfig ] || fail "Falta Local.xcconfig con el DEVELOPMENT_TEAM. Cópialo de Local.xcconfig.example."
+grep -Eq '^DEVELOPMENT_TEAM *= *[A-Z0-9]+' Local.xcconfig \
+  || fail "DEVELOPMENT_TEAM está vacío en Local.xcconfig."
+
 BUILD_NUMBER="$(date +%y%m%d%H%M)"
 VERSION="$(grep -E '^[[:space:]]*MARKETING_VERSION = ' RadioApp.xcodeproj/project.pbxproj | head -1 | sed -E 's/.*= *"?([^";]*)"?;.*/\1/')"
 ARCHIVE="build/testflight/RadioApp-$VERSION-$BUILD_NUMBER.xcarchive"

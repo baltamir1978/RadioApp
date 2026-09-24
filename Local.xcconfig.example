@@ -1,0 +1,3 @@
+// Firma local: cópialo a Local.xcconfig (que git ignora) y pon tu equipo.
+// Se saca de developer.apple.com › Membership details › Team ID.
+DEVELOPMENT_TEAM =

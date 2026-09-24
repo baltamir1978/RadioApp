@@ -99,10 +99,15 @@ Criterios que conviene no romper al tocar la interfaz:
 ## Puesta en marcha
 
 1. Clona el repositorio y abre `RadioApp.xcodeproj` en Xcode.
-2. Selecciona tu **Team** de firma en *Signing & Capabilities* para los targets `RadioApp` y `RadioWidget`.
+2. Copia `Local.xcconfig.example` a `Local.xcconfig` y pon tu **Team ID** en `DEVELOPMENT_TEAM`. Ese fichero
+   no va al repositorio, y la app y el widget heredan el equipo de ahí: no lo elijas en *Signing &
+   Capabilities*, que lo escribiría en el proyecto.
 3. Asegúrate de que están activadas las *capabilities*: **Background Modes → Audio**, **App Groups** (compartido con el widget) y **SiriKit**.
 4. Compila y ejecuta. CarPlay y el micrófono necesitan un dispositivo real; Shazam sobre el
    stream y la letra sincronizada sí funcionan en el simulador (ver «Deep links»).
+
+Para instalarla en el iPhone sin Xcode, `./Tools/testflight.sh` la compila, la firma y la sube a
+TestFlight (con `--dry-run` sólo comprueba que encuentra la clave de la API y el equipo).
 
 > Consulta también `SETUP_XCODE.md` para los pasos detallados de configuración del proyecto en Xcode.
 
