@@ -56,7 +56,6 @@ widget.build_configurations.each do |config|
   bs['GENERATE_INFOPLIST_FILE'] = 'NO'
   bs['CODE_SIGN_ENTITLEMENTS'] = 'RadioWidget/RadioWidget.entitlements'
   bs['CODE_SIGN_STYLE'] = 'Automatic'
-  bs['DEVELOPMENT_TEAM'] = 'JKMR84FU58'
   bs['IPHONEOS_DEPLOYMENT_TARGET'] = '26.5'
   bs['SWIFT_VERSION'] = '6.0'
   bs['TARGETED_DEVICE_FAMILY'] = '1,2'
