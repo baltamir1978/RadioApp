@@ -21,3 +21,6 @@ DerivedData/
 
 # Firma local (DEVELOPMENT_TEAM): ver Local.xcconfig.example
 Local.xcconfig
+
+# Manifiesto de Xcode Cloud: lo genera Xcode solo y no se usa
+*.xcodeproj/xcshareddata/xcodecloud/
